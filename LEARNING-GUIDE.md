@@ -14,16 +14,19 @@
 
 ### 1.1 먼저 알아야 할 것 (선행 지식 체크리스트)
 
-| 주제 | 이 서버에서 어디에 쓰이나 | 모르면 먼저 볼 것 |
+각 주제의 설명은 이 문서 끝의 **부록 A**에 있습니다. 체크리스트에서 모르는 항목만 골라 읽으면 됩니다.
+
+| 주제 | 이 서버에서 어디에 쓰이나 | 설명 |
 |---|---|---|
-| TCP는 **바이트 스트림**이다 (메시지 경계가 없다) | `RecvBuffer`, `Session.ProcessPackets`의 프레이밍 | "TCP 분할/병합", `tests/.../RecvBufferTests.cs` |
-| C# `async/await`, `Task`, `CancellationToken` | 테스트 클라이언트, Generic Host 종료 | Microsoft Learn: 비동기 프로그래밍 |
-| 이벤트와 델리게이트, 제네릭 제약(`where T : IMessage<T>`) | `Session.Disconnected`, `PacketDispatcher.Register<T>` | C# 기초 문법 |
-| 스레드, `lock`, `Monitor.Wait/Pulse`, `Interlocked`, `Volatile` | `JobQueue`, `Session`의 송신 큐와 연결 플래그 | "C# 스레드 동기화" |
-| `Span<byte>`, `ArraySegment<byte>`, `BinaryPrimitives` | `PacketHeader`, `RecvBuffer.Data`, 송신 gather | Microsoft Learn: `Span<T>` |
-| protobuf 개념 (스키마, 필드 번호, proto3 기본값) | `src/QuizMMO.Protocol/Protos/protocol.proto` | https://protobuf.dev/programming-guides/proto3/ |
-| `SocketAsyncEventArgs` 비동기 소켓 모델 | `Listener`, `Session` | https://learn.microsoft.com/dotnet/api/system.net.sockets.socketasynceventargs |
-| .NET Generic Host (설정·로깅·DI·종료) | `Program.cs`, `GameServer : IHostedService` | https://learn.microsoft.com/dotnet/core/extensions/generic-host |
+| C# 기초 문법 (C++과 다른 점) | 전체 | 부록 A.1 |
+| 스레드, `lock`, `Monitor.Wait/Pulse`, `Interlocked`, `Volatile` | `JobQueue`, `Session`의 송신 큐와 연결 플래그 | 부록 A.2 |
+| TCP는 **바이트 스트림**이다 (메시지 경계가 없다) | `RecvBuffer`, `Session.ProcessPackets`의 프레이밍 | 부록 A.3, `tests/.../RecvBufferTests.cs` |
+| C# `async/await`, `Task`, `CancellationToken` | 테스트 클라이언트, Generic Host 종료 | 부록 A.4 |
+| 델리게이트, 람다, 이벤트, 제네릭 제약(`where T : IMessage<T>`) | `Session.Disconnected`, `PacketDispatcher.Register<T>` | 부록 A.5 |
+| `Span<byte>`, `ArraySegment<byte>`, `BinaryPrimitives` | `PacketHeader`, `RecvBuffer.Data`, 송신 gather | 부록 A.6 |
+| protobuf 개념 (스키마, 필드 번호, proto3 기본값) | `src/QuizMMO.Protocol/Protos/protocol.proto` | 부록 A.7, https://protobuf.dev/programming-guides/proto3/ |
+| `SocketAsyncEventArgs` 비동기 소켓 모델 | `Listener`, `Session` | 부록 A.8, https://learn.microsoft.com/dotnet/api/system.net.sockets.socketasynceventargs |
+| .NET Generic Host (설정·로깅·DI·종료) | `Program.cs`, `GameServer : IHostedService` | 부록 A.9, https://learn.microsoft.com/dotnet/core/extensions/generic-host |
 
 ### 1.2 읽는 순서 (단계별 목표와 확인 질문)
 
@@ -297,3 +300,295 @@ dotnet run --project tools/QuizMMO.TestClient -- --clients 3 --duration 3     # 
 - 둘 다 패킷마다 송신 버퍼를 한 번 할당합니다 (C++ `SendBuffer`, C# `byte[]`). C#은 GC가 회수하므로 트래픽이 커지면 Gen0 GC가 늘어납니다. 지금 규모(수천 세션, 작은 패킷)에서는 문제가 아니고, 필요해지면 `ArrayPool<byte>`나 `System.IO.Pipelines`로 옮깁니다. 측정 전에 최적화하지 않습니다.
 - C++은 워커 스레드 수를 설정(`net.worker_threads`)으로 잡았지만 .NET은 ThreadPool이 알아서 늘립니다. 로직 스레드가 하나라는 점은 같으므로 병목은 양쪽 모두 로직 스레드에서 먼저 나타납니다.
 - C++ IOCP 코드를 읽어 두면 .NET이 "무엇을 대신해 주는지"가 보입니다. 반대로 C# 버전을 먼저 이해하고 C++을 보면 `OverlappedEx::owner` 같은 수명 관리가 왜 필요했는지 이해됩니다. 둘을 번갈아 보는 것이 이 저장소를 두 버전으로 남겨 둔 이유입니다.
+
+---
+
+## 부록 A. 선행 지식 정리
+
+1.1절 체크리스트의 각 항목을 이 서버에 필요한 만큼만 설명합니다. 예시는 모두 저장소 코드에 실제로 있는 형태입니다.
+
+### A.1 C# 기초 문법 (C++ 개발자용)
+
+**C++과 가장 다른 다섯 가지**
+
+1. **메모리는 GC가 관리한다.** `new`만 있고 `delete`는 없습니다. 참조가 끊기면 언젠가 수거됩니다. 소멸자 대신 "자원 해제가 필요한 객체"는 `IDisposable`을 구현하고 `using`으로 씁니다.
+   ```csharp
+   using var client = new TcpClient();   // 블록을 벗어날 때 Dispose() 자동 호출
+   ```
+2. **값 타입과 참조 타입이 나뉜다.** `struct`, `int`, `enum`은 값 타입이라 대입하면 복사됩니다. `class`, `string`, 배열, 델리게이트는 참조 타입이라 대입하면 같은 객체를 가리킵니다. C++의 `shared_ptr<T>`가 기본이라고 생각하면 비슷합니다. 작고 불변인 `PacketHeader`는 `readonly struct`, 상태를 가진 `Session`은 `class`인 이유입니다.
+3. **헤더 파일이 없고 선언 순서가 상관없다.** 한 파일에 클래스 여러 개를 둘 수 있고, 아래에 선언한 메서드를 위에서 불러도 됩니다. 대신 `namespace`와 `using`으로 묶습니다.
+   ```csharp
+   using QuizMMO.Protocol;                 // #include + using namespace 역할
+   namespace QuizMMO.Server.Networking;    // 파일 전체에 적용되는 네임스페이스
+   ```
+4. **자유 함수가 없다.** 모든 함수는 어떤 타입의 멤버입니다. 유틸 함수는 `static class`에 둡니다 (`Clock`, `PacketSerializer`). 예외는 `Program.cs`의 최상위 문장인데, 컴파일러가 `Main`으로 감싸 줍니다.
+5. **`null` 가능 여부를 타입이 표시한다.** `string`은 null이 아니어야 하고 `string?`은 null일 수 있습니다.
+   ```csharp
+   Player? player = session.Context as Player;   // 캐스팅 실패하면 null (예외 없음)
+   if (player is null) return;
+   var name = player?.Nickname ?? "unknown";      // null이면 기본값
+   ```
+
+**타입과 변수.** `int`(32비트), `long`(항상 64비트), `uint`, `ulong`, `ushort`, `byte`, `float`, `double`, `bool`, `string`, `char`(UTF-16 한 단위). 크기가 플랫폼에 따라 변하지 않습니다. `var`는 타입 추론(`auto`), `const`는 컴파일 타임 상수, `readonly`는 생성자 이후 불변인 필드입니다.
+
+```csharp
+public const int MaxPacketSize = 4096;
+private readonly Socket _socket;
+var header = PacketHeader.Read(span);
+```
+
+**문자열.** 불변 객체이고 `==`가 내용을 비교합니다. `$"..."`로 보간합니다. `Length`는 문자 수이고 바이트 수가 아니므로, 바이트 제한은 `Encoding.UTF8.GetByteCount(s)`로 검사합니다.
+
+**제어문.** `if`, `for`, `while`은 같습니다. `foreach`가 기본 순회이고 순회 중 컬렉션을 바꾸면 예외가 납니다 (그래서 `Room.Players()`가 복사본을 돌려줍니다). `switch`는 각 `case`가 `break`/`return`으로 끝나야 하고(fallthrough 금지), 타입으로 분기할 수 있습니다.
+
+```csharp
+switch (message)
+{
+    case SLogin m: Console.WriteLine(m.Result); break;   // m은 SLogin으로 캐스팅됨
+    case SChat m:  Console.WriteLine(m.Text);   break;
+}
+foreach (var (id, room) in _quizRooms) room.Update(dt);  // Dictionary 항목 분해
+```
+
+**클래스와 프로퍼티.** 필드는 `private`, 바깥에는 프로퍼티로 노출합니다. 프로퍼티는 겉보기엔 변수지만 안은 getter/setter 함수입니다.
+
+```csharp
+public sealed class Player                       // sealed: 상속 금지 (C++ final)
+{
+    public ulong Id { get; }                     // 읽기 전용 (생성자에서만 대입)
+    public uint RoomId { get; set; }             // 읽기/쓰기
+    public bool IsConnected => Link.IsConnected; // 계산 프로퍼티
+    public Player(ulong id, string nickname, IMessageSink link) { Id = id; Nickname = nickname; Link = link; }
+}
+```
+
+접근 제한자는 `public`, `private`, `protected`, `internal`(같은 어셈블리). 상속은 `: Base`, 가상 함수는 `virtual`/`override`, 순수 가상은 `abstract`, 인터페이스는 `interface`(이름은 `I`로 시작).
+
+```csharp
+public abstract class Room { public abstract RoomType Type { get; } public virtual void Update(float dt) { } }
+public sealed class QuizRoom : Room { public override RoomType Type => RoomType.Quiz; }
+public interface IMessageSink { bool IsConnected { get; } void Send(byte[] packet); }
+```
+
+**struct와 enum.** `struct`는 값 타입이라 복사가 싸고 GC를 거치지 않습니다. 작고 불변인 데이터에만 씁니다. `enum`은 정수 기반이고 정수로 쓰려면 명시적 캐스팅이 필요합니다 (`(ushort)MsgId.CLogin`).
+
+**제네릭.** C++ 템플릿과 비슷하지만 런타임 타입이고, 제약을 `where`로 씁니다.
+
+```csharp
+public void Register<T>(Func<Session, T, bool> handler) where T : class, IMessage<T>
+```
+
+**컬렉션.** `List<T>`(vector), `Dictionary<K,V>`(unordered_map), `Queue<T>`, `HashSet<T>`, 배열 `byte[]`. 스레드 안전 버전은 `ConcurrentDictionary`, `ConcurrentQueue`.
+
+**예외.** `try/catch/finally`, 타입별 `catch`. 반환 코드 대신 예외가 기본이라 소켓 함수는 `SocketException`을 던집니다. 실패가 정상 흐름인 곳은 `bool TryXxx(out result)` 패턴을 씁니다 (`TryDeserialize`, `TryGetValue`).
+
+**C++ 출신이 자주 틀리는 것.** `if (count)`처럼 정수를 조건에 쓸 수 없습니다. 배열도 참조 타입이라 함수에 넘기면 원본이 바뀝니다. `ref`/`out`은 호출하는 쪽에도 써야 합니다 (`Drain(ref _pending, wait)`). 정수 나눗셈은 정수이므로 `1000 / tickHz`는 `1000.0 / tickHz`로 씁니다. `struct`를 `List`에서 꺼내 수정하면 복사본을 수정하는 것입니다.
+
+### A.2 스레드와 동기화
+
+**왜 필요한가.** 두 스레드가 같은 메모리를 동시에 읽고 쓰면(데이터 레이스) 결과가 실행마다 달라집니다. `Dictionary`에 두 스레드가 동시에 `Add`하면 내부 구조가 깨지고, `count++`는 "읽기, 더하기, 쓰기" 세 단계라 둘이 겹치면 한 번이 사라집니다. 이런 버그는 재현이 안 되고 로그에도 안 남습니다. 그래서 **규칙으로 예방**해야 하며, 이 서버는 모든 클래스 주석에 "어느 스레드에서 실행되는가"를 적어 둡니다.
+
+**이 서버의 전략: 공유를 최소화한다.** 게임 상태(룸, 플레이어, 대기열)는 로직 스레드 하나만 만지므로 게임 코드에는 동기화가 없습니다. I/O 스레드는 상태를 직접 바꾸는 대신 "할 일"을 `JobQueue`에 넣습니다 (메시지 전달 방식). 그래서 스레드가 만나는 지점이 `JobQueue`, `Session`의 송신 큐, `SessionManager`의 세션 표, 로그 레이트리밋 네 곳으로 줄고, 그 네 곳만 아래 도구로 보호합니다.
+
+**`lock`: 상호 배제.** `lock (obj) { ... }`는 한 번에 한 스레드만 블록에 들어가게 합니다. 내부적으로 `Monitor.Enter/Exit`를 `try/finally`로 감싼 것이라 예외가 나도 풀립니다. C++의 `std::lock_guard<std::mutex>`와 같습니다.
+
+```csharp
+private readonly object _sendLock = new();     // 잠그는 용도로만 쓰는 전용 객체
+bool start;
+lock (_sendLock)
+{
+    _sendQueue.Enqueue(packet);                // 락 안: 짧게, 자료구조만 건드린다
+    start = !_sendInFlight;
+    if (start) _sendInFlight = true;
+}
+if (start) PostSend();                         // 락 밖: I/O 호출은 락 밖에서
+```
+
+규칙 세 가지. (1) 락 객체는 `private readonly object` 전용 필드로 둡니다. `this`, `string`, 공개된 객체로 잠그면 밖에서 같은 객체를 잠가 교착을 만들 수 있습니다. (2) 락 안에서는 자료구조 조작만 하고, I/O·콜백·대기(`Join`, `Wait`)는 하지 않습니다. (3) C#의 `lock`은 재진입이 됩니다 (같은 스레드가 다시 잠가도 교착 없음). 그래도 설계상 재진입을 믿지 않는 편이 안전합니다.
+
+**`Monitor.Wait/Pulse`: 조건 변수.** "조건이 될 때까지 잠들기"입니다. `Wait`는 락을 풀고 잠들다가 `Pulse`(하나) 또는 `PulseAll`(전부)로 깨어나며 락을 다시 잡습니다. 타임아웃을 주면 그 시간 뒤 스스로 깨어납니다. `JobQueue`가 이것으로 "작업이 오거나 다음 틱 시각이 되면" 깨어납니다.
+
+```csharp
+public void Post(Action job)
+{
+    lock (_lock) { _jobs.Add(job); Monitor.Pulse(_lock); }      // 넣고 깨운다
+}
+public int Drain(ref List<Action> into, TimeSpan timeout)
+{
+    into.Clear();
+    lock (_lock)
+    {
+        if (_jobs.Count == 0 && timeout > TimeSpan.Zero) Monitor.Wait(_lock, timeout);   // 락을 풀고 잠든다
+        (into, _jobs) = (_jobs, into);                                                    // swap: 복사 없이 통째로 넘긴다
+    }
+    return into.Count;
+}
+```
+
+깨어났을 때 조건이 참이라는 보장이 없습니다 (타임아웃, 가짜 깨어남). 그래서 `Drain`은 "깨어나면 그냥 있는 것을 다 가져간다"로 설계해 조건 재검사가 필요 없게 했습니다. 일반적인 패턴은 `while (!조건) Monitor.Wait(lock);` 입니다.
+
+**`Interlocked`: 원자 연산.** 한 번에 끝나는 읽기-수정-쓰기입니다. 락 없이 카운터를 올리거나(`Increment`), 값을 바꾸면서 이전 값을 받거나(`Exchange`), 기대값일 때만 바꿉니다(`CompareExchange`). `Session.Disconnect`가 "여러 스레드가 동시에 불러도 한 번만 실행"을 이것으로 보장합니다.
+
+```csharp
+private int _connected = 1;
+public void Disconnect(string reason)
+{
+    if (Interlocked.Exchange(ref _connected, 0) == 0) return;   // 1→0 으로 바꾼 스레드 하나만 통과
+    ...
+}
+var id = (ulong)Interlocked.Increment(ref _nextId);             // 락 없는 ID 발급
+```
+
+**`Volatile`과 `volatile`: 보이게 하기.** 컴파일러와 CPU는 성능을 위해 읽기/쓰기를 캐시하거나 순서를 바꿀 수 있어서, 한 스레드가 바꾼 일반 필드를 다른 스레드가 영원히 옛 값으로 볼 수도 있습니다. `volatile` 필드나 `Volatile.Read/Write`는 "항상 메모리에서 읽고 바로 쓰며 순서를 지켜라"는 표시입니다. 단순 플래그(`GameLoop._running`, `Listener._running`, `Session.Context`)에 적합하고, `count++` 같은 복합 연산에는 부적합합니다 (그건 `Interlocked`).
+
+```csharp
+private volatile bool _running;                                   // 루프 종료 플래그
+public bool IsConnected => Volatile.Read(ref _connected) == 1;
+public object? Context { get => Volatile.Read(ref _context); set => Volatile.Write(ref _context, value); }
+```
+
+`lock` 획득/해제, `Interlocked`, `Volatile`는 모두 메모리 배리어 역할도 하므로, 락 안에서 쓴 값은 다음에 같은 락을 잡는 스레드에게 보입니다. 그래서 락으로 보호되는 필드에는 `volatile`이 필요 없습니다.
+
+**동시성 컬렉션.** `ConcurrentDictionary`, `ConcurrentQueue`는 개별 연산(`TryAdd`, `TryRemove`, `Enqueue`)이 스레드 안전합니다. 하지만 "확인한 뒤 행동"하는 두 단계는 안전하지 않습니다. `SessionManager.Accept`가 `Count`를 보고 `_sessions[id] = session`을 하는 사이 다른 스레드가 끼어들 수 있어 정원이 몇 명 넘을 수 있는데, 정확한 정원이 필요한 수치가 아니라서 허용했습니다. 정확해야 하면 `lock`을 쓰거나 `TryAdd`의 반환값으로 결정합니다.
+
+**교착(deadlock) 피하기.** 락을 두 개 이상 잡을 때 스레드마다 순서가 다르면 교착입니다. 이 서버는 락 안에서 다른 락을 잡지 않도록 설계해 이 문제를 없앴습니다. 또 하나의 전형은 "스스로를 기다리기"인데, `GameLoop.Stop()`을 로직 스레드 안에서 부르면 자기 자신을 `Join`해서 영원히 멈춥니다. 종료는 반드시 호스트 스레드에서 합니다.
+
+**ThreadPool과 전용 스레드.** 짧고 많은 작업(소켓 완료 처리)은 런타임의 ThreadPool이 맡습니다. 어느 스레드에서 실행될지 모르고 순서도 보장되지 않습니다. 순서와 상태가 중요한 긴 루프(게임 로직)는 `new Thread(Run)`으로 전용 스레드를 만듭니다. `IsBackground = true`로 두면 프로세스 종료를 막지 않습니다.
+
+**디버깅.** 재현이 안 되면 로그에 스레드 번호를 남기고(`Environment.CurrentManagedThreadId`, 이 서버의 `[tN]`), VS의 디버그 > 창 > 스레드에서 중단점이 어느 스레드에서 걸렸는지 봅니다. "이 코드는 어느 스레드에서 도는가"에 바로 답할 수 없는 메서드가 있으면 그것이 버그 후보입니다.
+
+### A.3 TCP는 바이트 스트림이다
+
+TCP는 **순서가 보장되고 유실이 없는 바이트의 흐름**을 제공하지만 **메시지 경계는 없습니다.** 클라이언트가 `send`를 세 번 해도 서버의 `recv`는 한 번에 받을 수도, 다섯 번에 나눠 받을 수도 있습니다. 한 패킷이 두 번의 수신에 걸쳐 쪼개져 오고(분할), 두 패킷이 한 번에 붙어 오는(병합) 일이 정상입니다.
+
+그래서 애플리케이션이 경계를 만들어야 하고, 가장 흔한 방법이 **길이 접두 헤더**입니다. 이 서버는 `{u16 size, u16 id}` 4바이트를 붙입니다. 수신 쪽 규칙은 하나입니다. "헤더가 다 왔으면 size를 읽고, size만큼 다 왔으면 패킷 하나를 꺼내고, 모자라면 다음 수신을 기다린다." `Session.ProcessPackets`와 `RecvBufferTests.HeaderSplitAcrossTwoWrites_Reassembles`가 정확히 이것입니다.
+
+알아둘 사실 몇 가지. `recv`가 0바이트를 돌려주면 상대가 연결을 닫은 것입니다. `Shutdown(Both)` 후 `Close()`는 "보낼 것 없음"을 알리고 닫는 정상 종료 순서입니다. Nagle 알고리즘은 작은 패킷을 모아 보내 지연을 늘리므로 게임 서버는 `NoDelay = true`로 끕니다. 크기 필드는 신뢰하지 않습니다. 악의적 클라이언트가 `size=65535`를 보내면 그만큼 기다리며 버퍼를 점유하므로 `MaxPacketSize` 범위를 벗어나면 즉시 끊습니다.
+
+### A.4 async/await와 Task
+
+`Task`는 "아직 끝나지 않은 작업의 약속"이고, `await`는 "끝나면 여기서 이어서 실행해라"입니다. `await` 지점에서 메서드는 호출자에게 돌아가고 스레드는 다른 일을 하러 갑니다. 그래서 수천 개의 연결을 기다려도 스레드가 수천 개 필요하지 않습니다.
+
+```csharp
+static async Task<ClientResult> RunClientAsync(Options options, int index)
+{
+    await client.ConnectAsync(options.Host, options.Port);        // 연결될 때까지 스레드를 막지 않고 기다림
+    var received = await stream.ReadAsync(chunk, cts.Token);      // 취소 토큰으로 중단 가능
+    ...
+}
+var results = await Task.WhenAll(tasks);                           // 여러 작업을 동시에 돌리고 모두 기다림
+```
+
+규칙. 반환 타입은 `Task`(결과 없음) 또는 `Task<T>`이고, `async void`는 예외가 사라지므로 이벤트 핸들러 밖에서는 쓰지 않습니다. 예외는 `await` 지점에서 다시 던져지므로 그곳을 `try/catch`로 감쌉니다. 콘솔 앱에는 UI 스레드가 없어서 `await` 이후 코드는 ThreadPool의 아무 스레드에서 이어집니다 (그래서 A.2의 규칙이 그대로 적용됩니다). `CancellationToken`은 협력적 취소입니다. 토큰을 받는 함수는 취소되면 `OperationCanceledException`을 던지고, 호출자가 그것을 잡습니다.
+
+서버의 `Session`은 `async/await` 대신 더 낮은 수준인 `SocketAsyncEventArgs`를 씁니다 (A.8). 할당이 없고 완료 처리를 완전히 통제할 수 있어서이고, 또 C++ IOCP 코드와 1:1로 대응되어 학습에 유리하기 때문입니다. 테스트 클라이언트처럼 가독성이 더 중요한 곳은 `async/await`가 맞습니다.
+
+### A.5 델리게이트, 람다, 이벤트, 제네릭 제약
+
+**델리게이트**는 타입이 있는 함수 참조입니다. 직접 선언할 수도 있지만 대부분 내장 제네릭을 씁니다. `Action<T1, T2>`는 반환이 없고, `Func<T1, TResult>`는 마지막 인자가 반환 타입입니다.
+
+```csharp
+public delegate bool PacketHandler(Session session, IMessage message);   // 직접 선언
+Action<float>? TickHandler;                                               // float 하나 받고 반환 없음
+Func<Session, T, bool> handler;                                           // 두 개 받고 bool 반환
+```
+
+**람다**는 이름 없는 함수이고 바깥 변수를 **캡처**합니다 (클로저). 캡처는 참조 캡처라서, 람다가 실행되는 시점의 값이 쓰입니다. 이 서버는 핸들러에서 캡처한 `session`과 `msg`를 로직 스레드로 넘길 때 이것을 씁니다.
+
+```csharp
+server.Loop.Post(() => server.OnLogin(session, msg.ProtocolVersion, msg.Nickname));
+```
+
+**이벤트**는 "여러 구독자를 받는 델리게이트 필드"에 `event`를 붙인 것입니다. 바깥에서는 `+=`/`-=`만 할 수 있고 호출은 선언한 클래스만 합니다. 구독자가 없으면 null이므로 `?.Invoke`로 부릅니다.
+
+```csharp
+public event Action<Session, string>? Disconnected;     // Session 안
+session.Disconnected += OnDisconnected;                 // SessionManager 가 구독
+Disconnected?.Invoke(this, reason);                     // Session 이 호출
+```
+
+**제네릭 제약** `where T : class, IMessage<T>`는 "T는 참조 타입이고 `IMessage<T>`를 구현한다"는 뜻입니다. 덕분에 `Register<CLogin>(...)`처럼 타입만 적으면 `PacketRegistry.GetId<T>()`로 id를 찾고, 핸들러는 `IMessage`가 아니라 `CLogin`을 받습니다. 캐스팅 코드가 호출자에서 사라집니다.
+
+### A.6 Span, Memory, ArraySegment, BinaryPrimitives
+
+`Span<T>`는 "어떤 연속 메모리의 일부"를 복사 없이 가리키는 창(view)입니다. 배열, 스택 메모리, 네이티브 메모리 어디든 같은 코드로 다룹니다. `ReadOnlySpan<T>`는 읽기 전용 창입니다. `Slice(offset, length)`로 더 작은 창을 만듭니다.
+
+```csharp
+public ReadOnlySpan<byte> Data => _buffer.AsSpan(_readPos, DataSize);           // 복사 없음
+var body = _recvBuffer.Data.Slice(PacketHeader.Size, header.BodySize);           // 본문 부분만
+message.WriteTo(buffer.AsSpan(PacketHeader.Size));                               // 헤더 뒤부터 쓰기
+```
+
+제약이 하나 있습니다. `Span`은 스택에만 살 수 있어서(`ref struct`) 클래스 필드에 저장하거나 `async` 메서드 안에서 `await`를 넘어 쓸 수 없습니다. 그런 경우는 `Memory<T>`/`ReadOnlyMemory<T>`를 씁니다. 서버 코드는 모두 동기 메서드 안에서 쓰므로 `Span`으로 충분합니다.
+
+`BinaryPrimitives`는 정수를 **엔디언을 명시해** 읽고 씁니다. `ReadUInt16LittleEndian(span)`처럼 쓰면 서버와 클라이언트의 CPU가 달라도 같은 바이트 순서가 보장됩니다. C++에서 `memcpy`로 구조체를 그대로 보내던 것의 안전한 버전입니다.
+
+`ArraySegment<byte>`는 "배열 + 오프셋 + 길이"입니다. `Span`과 비슷하지만 일반 struct라서 리스트에 담을 수 있고, `SocketAsyncEventArgs.BufferList`가 이 타입의 리스트를 받아 여러 버퍼를 한 번에(gather) 보냅니다. `ArrayPool<byte>.Shared`는 배열을 빌리고(`Rent`) 돌려주는(`Return`) 풀로, 할당을 줄일 때 씁니다. 지금은 쓰지 않고 1.4절 과제 7에 남겨 두었습니다.
+
+### A.7 protobuf 핵심
+
+**스키마가 먼저다.** `.proto` 파일에 메시지와 필드를 적으면 `protoc`가 각 언어의 클래스를 생성합니다. 이 저장소는 빌드 시 Grpc.Tools가 자동으로 생성하므로 `.proto`만 고치면 됩니다. Unity도 같은 `.proto`에서 같은 클래스를 얻습니다.
+
+```proto
+message CLogin {
+  uint32 protocol_version = 1;   // "= 1" 은 기본값이 아니라 필드 번호
+  string nickname = 2;
+}
+```
+
+**필드 번호가 와이어의 식별자입니다.** 이름은 바뀌어도 되지만 번호는 바뀌면 안 됩니다. 필드를 지웠다면 그 번호를 재사용하지 말고 `reserved 3;`으로 막습니다. 새 필드를 추가하는 것은 하위 호환됩니다 (옛 클라이언트는 모르는 필드를 무시하고, 새 클라이언트는 빠진 필드를 기본값으로 읽습니다). 타입을 바꾸는 것은 호환되지 않습니다.
+
+**proto3의 기본값.** 0, 빈 문자열, false, 열거형의 0번 값은 **와이어에 실리지 않습니다.** 그래서 "보내지 않았다"와 "0을 보냈다"를 구별할 수 없고, 열거형의 첫 값은 반드시 0이어야 합니다 (`MSG_ID_NONE = 0`). 구별이 필요하면 `optional`을 붙입니다.
+
+**인코딩.** 정수는 varint라서 작은 값이 적은 바이트를 차지합니다 (`uint64 player_id = 5`는 2바이트). 문자열은 길이 접두 UTF-8입니다. 이 서버는 protobuf 본문 앞에 자체 4바이트 헤더를 붙이는데, protobuf 자체는 메시지 경계와 타입을 담지 않기 때문입니다 (A.3).
+
+**C# 생성 코드 이름.** 메시지 `CLogin` → 클래스 `CLogin`, 필드 `protocol_version` → 프로퍼티 `ProtocolVersion`, 열거형 값 `MSG_ID_C_LOGIN` → `MsgId.CLogin` (열거형 이름 접두가 잘립니다). 자주 쓰는 API는 `CLogin.Parser.ParseFrom(span)`, `message.CalculateSize()`, `message.WriteTo(span)`입니다.
+
+**주의: 관대한 파싱.** 본문이 중간에 잘려도 필드 경계에서 끊겼다면 예외 없이 파싱되고 빠진 필드는 기본값이 됩니다. 와이어 형식 자체가 깨진 경우에만 `InvalidProtocolBufferException`이 납니다. 그래서 "파싱이 됐다"는 "값이 정상이다"가 아니며, 길이·범위 검증은 `GameHandlers`에서 `ProtocolInfo` 상수로 직접 합니다.
+
+### A.8 SocketAsyncEventArgs 모델
+
+`Socket.ReceiveAsync(args)`는 "이 버퍼에 받아라"를 운영체제에 걸어 두고 즉시 돌아옵니다. 완료되면 `args.Completed` 이벤트가 ThreadPool 스레드에서 호출되고, `args.BytesTransferred`와 `args.SocketError`에 결과가 들어 있습니다. `SocketAsyncEventArgs`는 한 번 만들어 계속 재사용하므로 연결당 할당이 거의 없습니다. Windows에서는 이것이 IOCP 위에서, Linux에서는 epoll 위에서 돕니다.
+
+**가장 중요한 규칙: 반환값 `false`는 동기 완료입니다.** 데이터가 이미 도착해 있으면 `ReceiveAsync`가 즉시 결과를 채우고 `false`를 돌려주며, 이때 `Completed`는 **호출되지 않습니다.** 결과를 그 자리에서 처리해야 하고, 또 다음 수신을 다시 걸어야 합니다. 이를 재귀로 처리하면 데이터가 몰릴 때 스택이 깊어지므로 루프로 씁니다.
+
+```csharp
+private void PostRecv()
+{
+    while (IsConnected)
+    {
+        _recvArgs.SetBuffer(_recvBuffer.Buffer, _recvBuffer.WritePos, _recvBuffer.FreeSize);
+        bool pending = _socket.ReceiveAsync(_recvArgs);
+        if (pending) return;                   // 비동기: 나중에 Completed → HandleRecv → PostRecv
+        if (!HandleRecv(_recvArgs)) return;    // 동기: 바로 처리하고 루프로 다시 건다
+    }
+}
+_recvArgs.Completed += (_, args) => { if (HandleRecv(args)) PostRecv(); };
+```
+
+**수신 1개, 송신 1개.** 한 소켓에 `ReceiveAsync`를 두 개 걸면 완료 순서가 보장되지 않아 바이트가 섞입니다. 송신도 같아서, 보낼 것이 여러 개면 큐에 모아 두고 진행 중인 송신이 끝날 때 `BufferList`로 한 번에 보냅니다 (gather). `BufferList`는 지정할 때 내부에 복사하므로 리스트 내용을 바꿨으면 다시 지정합니다.
+
+**재사용 규칙.** 수락용 `args`는 다음 `AcceptAsync` 전에 `args.AcceptSocket = null`로 비웁니다. `Buffer`와 `BufferList`는 동시에 설정할 수 없습니다. 진행 중인 작업이 있을 수 있는 `args`는 `Dispose`하지 않습니다 (세션이 참조를 잃으면 GC가 처리합니다).
+
+**종료.** `Socket.Close()`는 걸려 있는 작업을 취소하고, 그 작업들은 `SocketError.OperationAborted`로 완료됩니다. `Session.Disconnect`가 `_connected`를 0으로 바꾼 뒤이므로 `HandleRecv/HandleSend`는 `IsConnected`가 false인 것을 보고 조용히 끝납니다.
+
+**C++ IOCP와의 대응.** `WSARecv/WSASend` ↔ `ReceiveAsync/SendAsync`, `OVERLAPPED`(+`OverlappedEx`) ↔ `SocketAsyncEventArgs`, `GetQueuedCompletionStatus`를 도는 워커 스레드 ↔ ThreadPool, `CONTAINING_RECORD`로 컨텍스트 복원 ↔ `Completed`의 `args` 자체가 컨텍스트, `AcceptEx` 선행 게시 ↔ `AcceptAsync` N개, `shared_ptr owner`로 수명 보장 ↔ GC. 한 가지 차이가 있는데, IOCP는 즉시 완료되어도 완료 패킷을 큐에 넣어 항상 같은 경로로 처리되지만 .NET은 `false`를 돌려주는 동기 경로가 따로 있습니다.
+
+### A.9 .NET Generic Host
+
+Generic Host는 "서버 프로그램의 뼈대"를 제공하는 라이브러리입니다. 설정 읽기, 로깅, 의존성 주입(DI), 시작/종료 순서, Ctrl+C 처리를 한 패키지(`Microsoft.Extensions.Hosting`)로 줍니다. 직접 만들면 수백 줄이 될 것을 `Program.cs` 스무 줄로 끝냅니다.
+
+```csharp
+var builder = Host.CreateApplicationBuilder(args);
+builder.Services.Configure<ServerOptions>(builder.Configuration.GetSection("Server"));   // 설정 → 객체 바인딩
+builder.Services.AddHostedService<GameServer>();                                         // 시작/종료를 호스트가 관리
+await builder.Build().RunAsync();                                                        // Ctrl+C 까지 실행
+```
+
+**설정 우선순위.** `appsettings.json` → 환경 변수 → 커맨드라인 순으로 **나중에 추가된 소스가 우선**합니다. 그래서 `--Server:Quiz:RoomSize=2`가 파일 값을 덮어씁니다. 콜론은 중첩 섹션 구분자입니다. `IOptions<ServerOptions>`를 생성자에서 받으면 바인딩된 객체가 들어옵니다.
+
+**IHostedService / BackgroundService.** `StartAsync`는 호스트가 뜰 때, `StopAsync`는 종료 신호(Ctrl+C, `StopApplication()`)가 오면 호출됩니다. 등록한 순서대로 시작하고 역순으로 멈춥니다. 오래 도는 작업은 `BackgroundService`를 상속해 `ExecuteAsync(stoppingToken)`에 쓰고, 토큰이 취소되면 정리합니다 (`SmokeStopper`).
+
+**로깅.** `ILogger<T>`를 생성자에서 받아 `LogInformation("[player {Id}] ...", id)`처럼 **구조적 로깅**으로 씁니다. 문자열 보간이 아니라 자리표시자를 쓰는 이유는 로그 수집기가 필드로 인식할 수 있게 하기 위해서이고, 레벨이 꺼져 있으면 포맷 비용도 들지 않습니다.
+
+**왜 쓰는가.** 설정 파일 파서, 종료 핸들러, 로거를 직접 만들었던 C++ 버전(`Config.cpp`, `main.cpp`의 `SetConsoleCtrlHandler`, `Log.cpp`)이 모두 이 라이브러리로 대체되었습니다. 3.2절의 대응표에서 "없음"으로 표시된 항목 상당수가 여기서 옵니다.

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    서버와 Unity 클라이언트가 공유하는 프로토콜 라이브러리.
+    netstandard2.1: Unity 2021.2+ 가 그대로 참조할 수 있다 (빌드된 DLL + Google.Protobuf.dll을 Assets/Plugins에 복사).
+    .proto는 빌드 시 Grpc.Tools의 protoc가 C# 클래스로 생성한다 (obj/ 아래, 소스에는 .proto만 둔다).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>10.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>QuizMMO.Protocol</RootNamespace>
+    <AssemblyName>QuizMMO.Protocol</AssemblyName>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 버전 고정 (2026-10-23 복원 결과). 올릴 때는 "dotnet list package" 의 outdated 옵션으로 확인 후 바꾼다. -->
+    <PackageReference Include="Google.Protobuf" Version="3.36.2" />
+    <PackageReference Include="Grpc.Tools" Version="2.84.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Protos\protocol.proto" GrpcServices="None" />
+  </ItemGroup>
+
+</Project>

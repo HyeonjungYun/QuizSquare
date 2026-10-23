@@ -1,0 +1,149 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="core\Config.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="core\Log.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="gameplay\GameHandlers.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="gameplay\GameLoop.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="gameplay\GameServer.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="gameplay\PacketBuilders.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="gameplay\QuizQueue.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="gameplay\QuizRoom.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="gameplay\Room.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="gameplay\WorldRoom.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="networking\Iocp.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="networking\Listener.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="networking\NetCommon.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="networking\Packet.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="networking\PacketDispatcher.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="networking\RecvBuffer.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="networking\Session.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="networking\SessionManager.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\config\server.cfg" />
+    <None Include="..\CLAUDE.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Core">
+      <UniqueIdentifier>{1f5526fd-14d4-4542-9e72-b9bc1a77554b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay">
+      <UniqueIdentifier>{67026ce5-54fb-45c0-bee4-63dda43cefb6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Network">
+      <UniqueIdentifier>{6be2495b-7bd1-4de1-9316-603b04c79f14}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="core\Clock.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\Config.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\JobQueue.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\Log.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\Types.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="gameplay\GameHandlers.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="gameplay\GameLoop.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="gameplay\GameServer.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="gameplay\PacketBuilders.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="gameplay\Player.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="gameplay\QuizQueue.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="gameplay\QuizRoom.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="gameplay\Room.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="gameplay\WorldRoom.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="networking\Iocp.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="networking\Listener.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="networking\NetCommon.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="networking\Packet.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="networking\PacketDispatcher.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="networking\Protocol.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="networking\RecvBuffer.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="networking\SendBuffer.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="networking\Session.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="networking\SessionManager.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 서버 검증용 콘솔 클라이언트. Protocol 프로젝트만 참조하므로 Unity 클라이언트 네트워크 코드의 원형으로도 쓸 수 있다. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>QuizMMO.TestClient</RootNamespace>
+    <AssemblyName>QuizMMO.TestClient</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\QuizMMO.Protocol\QuizMMO.Protocol.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,38 @@
+# === Build output ===
+build/
+out/
+.vs/
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.log
+
+# === .NET ===
+bin/
+obj/
+TestResults/
+*.user
+
+# === Visual Studio per-user files ===
+*.vcxproj.user
+*.suo
+*.VC.db
+*.VC.opendb
+
+# === 개발 과정 파일: 로컬 전용, 원격에는 게임 소스와 README/LEARNING-GUIDE 만 올린다 ===
+CLAUDE.md
+CLAUDE.local.md
+project.yaml
+project.local.yaml
+Claude-Code-Game-Studios-main/
+design/
+production/
+docs/
+legacy/cpp/docs/
+.claude/
+server.log
+
+# === OS ===
+Thumbs.db
+Desktop.ini

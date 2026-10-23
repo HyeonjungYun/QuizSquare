@@ -1,0 +1,71 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "QuizServer", "src\QuizServer.vcxproj", "{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A64}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "QuizTestClient", "tools\testclient\QuizTestClient.vcxproj", "{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A65}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "libs", "libs", "{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A71}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "quiz_core", "src\core\quiz_core.vcxproj", "{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A61}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "quiz_net", "src\networking\quiz_net.vcxproj", "{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A62}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "quiz_game", "src\gameplay\quiz_game.vcxproj", "{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A63}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A72}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "networking_recv_buffer_test", "tests\networking_recv_buffer_test.vcxproj", "{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A66}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "networking_packet_test", "tests\networking_packet_test.vcxproj", "{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A67}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A64}.Debug|x64.ActiveCfg = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A64}.Debug|x64.Build.0 = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A64}.Release|x64.ActiveCfg = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A64}.Release|x64.Build.0 = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A65}.Debug|x64.ActiveCfg = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A65}.Debug|x64.Build.0 = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A65}.Release|x64.ActiveCfg = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A65}.Release|x64.Build.0 = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A61}.Debug|x64.ActiveCfg = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A61}.Debug|x64.Build.0 = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A61}.Release|x64.ActiveCfg = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A61}.Release|x64.Build.0 = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A62}.Debug|x64.ActiveCfg = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A62}.Debug|x64.Build.0 = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A62}.Release|x64.ActiveCfg = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A62}.Release|x64.Build.0 = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A63}.Debug|x64.ActiveCfg = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A63}.Debug|x64.Build.0 = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A63}.Release|x64.ActiveCfg = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A63}.Release|x64.Build.0 = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A66}.Debug|x64.ActiveCfg = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A66}.Debug|x64.Build.0 = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A66}.Release|x64.ActiveCfg = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A66}.Release|x64.Build.0 = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A67}.Debug|x64.ActiveCfg = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A67}.Debug|x64.Build.0 = Debug|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A67}.Release|x64.ActiveCfg = Release|x64
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A67}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A61} = {7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A71}
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A62} = {7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A71}
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A63} = {7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A71}
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A66} = {7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A72}
+		{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A67} = {7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A72}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A70}
+	EndGlobalSection
+EndGlobal

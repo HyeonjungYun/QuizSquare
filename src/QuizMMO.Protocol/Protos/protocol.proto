@@ -1,0 +1,112 @@
+// Quiz MMO 와이어 프로토콜. 서버(.NET)와 Unity 클라이언트가 같은 파일로 코드를 생성한다.
+//
+// 프레이밍: 모든 패킷은 4바이트 헤더 {u16 size(헤더 포함 전체), u16 id(MsgId)} 리틀엔디언 + protobuf 본문.
+// 헤더 처리는 PacketHeader.cs, id <-> 메시지 타입 매핑은 PacketRegistry.cs 에 있다.
+// 메시지 레이아웃을 바꾸면 ProtocolInfo.Version 을 올린다. CLogin 이 들고 오고 불일치는 거절된다.
+
+syntax = "proto3";
+
+package quiz.protocol;
+
+option csharp_namespace = "QuizMMO.Protocol";
+
+// 패킷 ID. C_ = 클라이언트→서버, S_ = 서버→클라이언트.
+// C# 에서는 접두 MSG_ID_ 가 잘려 MsgId.CLogin 처럼 보인다.
+enum MsgId {
+  MSG_ID_NONE = 0;
+
+  MSG_ID_C_LOGIN = 1;
+  MSG_ID_S_LOGIN = 2;
+
+  MSG_ID_C_CHAT = 10;
+  MSG_ID_S_CHAT = 11;
+
+  MSG_ID_C_PING = 20;
+  MSG_ID_S_PONG = 21;
+
+  MSG_ID_C_QUIZ_QUEUE_JOIN = 30;
+  MSG_ID_C_QUIZ_QUEUE_LEAVE = 31;
+  MSG_ID_S_QUIZ_QUEUE_STATUS = 32;
+
+  MSG_ID_S_ROOM_CHANGED = 40;   // 내가 들어간 룸
+  MSG_ID_S_PLAYER_ENTER = 41;   // 같은 룸에 누가 들어옴
+  MSG_ID_S_PLAYER_LEAVE = 42;   // 같은 룸에서 누가 나감
+}
+
+enum LoginResult {
+  LOGIN_RESULT_OK = 0;
+  LOGIN_RESULT_VERSION_MISMATCH = 1;
+  LOGIN_RESULT_BAD_NICKNAME = 2;
+  LOGIN_RESULT_ALREADY_LOGGED_IN = 3;
+}
+
+enum QueueState {
+  QUEUE_STATE_NONE = 0;
+  QUEUE_STATE_WAITING = 1;
+  QUEUE_STATE_MATCHED = 2;
+}
+
+enum RoomType {
+  ROOM_TYPE_WORLD = 0;
+  ROOM_TYPE_QUIZ = 1;
+}
+
+// ---- 로그인 ----
+message CLogin {
+  uint32 protocol_version = 1;  // ProtocolInfo.Version
+  string nickname = 2;          // 1..32 바이트 (UTF-8)
+}
+
+message SLogin {
+  LoginResult result = 1;
+  uint64 player_id = 2;         // result == OK 일 때만 유효
+  uint32 room_id = 3;           // 입장한 월드 룸
+}
+
+// ---- 채팅 ----
+message CChat {
+  string text = 1;              // 1..400 바이트 (UTF-8)
+}
+
+message SChat {
+  uint64 player_id = 1;
+  string nickname = 2;
+  string text = 3;
+}
+
+// ---- 핑 ----
+message CPing {
+  int64 client_time_ms = 1;
+}
+
+message SPong {
+  int64 client_time_ms = 1;
+  int64 server_time_ms = 2;     // 서버 유닉스 시각(ms)
+}
+
+// ---- 퀴즈 대기열 ----
+message CQuizQueueJoin {}
+
+message CQuizQueueLeave {}
+
+message SQuizQueueStatus {
+  QueueState state = 1;
+  uint32 waiting = 2;           // 현재 대기 인원
+  uint32 required = 3;          // 퀴즈방 정원
+}
+
+// ---- 룸 입퇴장 ----
+message SRoomChanged {
+  uint32 room_id = 1;
+  RoomType room_type = 2;
+  string room_name = 3;
+}
+
+message SPlayerEnter {
+  uint64 player_id = 1;
+  string nickname = 2;
+}
+
+message SPlayerLeave {
+  uint64 player_id = 1;
+}

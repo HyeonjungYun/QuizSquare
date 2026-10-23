@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A64}</ProjectGuid>
+    <RootNamespace>QuizServer</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Debug'">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Release'">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\vs\QuizCommon.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <!-- F5: 프로젝트 루트에서 config/server.cfg를 읽도록 작업 디렉터리와 인자를 미리 잡아둔다. -->
+  <PropertyGroup>
+    <LocalDebuggerWorkingDirectory>$(QuizRoot)</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArguments>--config config/server.cfg</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <ItemGroup>
+    <ClCompile Include="core\Config.cpp" />
+    <ClCompile Include="core\Log.cpp" />
+    <ClCompile Include="gameplay\GameHandlers.cpp" />
+    <ClCompile Include="gameplay\GameLoop.cpp" />
+    <ClCompile Include="gameplay\GameServer.cpp" />
+    <ClCompile Include="gameplay\PacketBuilders.cpp" />
+    <ClCompile Include="gameplay\QuizQueue.cpp" />
+    <ClCompile Include="gameplay\QuizRoom.cpp" />
+    <ClCompile Include="gameplay\Room.cpp" />
+    <ClCompile Include="gameplay\WorldRoom.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="networking\Iocp.cpp" />
+    <ClCompile Include="networking\Listener.cpp" />
+    <ClCompile Include="networking\NetCommon.cpp" />
+    <ClCompile Include="networking\Packet.cpp" />
+    <ClCompile Include="networking\PacketDispatcher.cpp" />
+    <ClCompile Include="networking\RecvBuffer.cpp" />
+    <ClCompile Include="networking\Session.cpp" />
+    <ClCompile Include="networking\SessionManager.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\config\server.cfg" />
+    <None Include="..\CLAUDE.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="gameplay\quiz_game.vcxproj">
+      <Project>{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A63}</Project>
+    </ProjectReference>
+    <ProjectReference Include="networking\quiz_net.vcxproj">
+      <Project>{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A62}</Project>
+    </ProjectReference>
+    <ProjectReference Include="core\quiz_core.vcxproj">
+      <Project>{7C1E6F2A-3B4D-4E5F-9A1B-0C2D3E4F5A61}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="core\Clock.h" />
+    <ClInclude Include="core\Config.h" />
+    <ClInclude Include="core\JobQueue.h" />
+    <ClInclude Include="core\Log.h" />
+    <ClInclude Include="core\Types.h" />
+    <ClInclude Include="gameplay\GameHandlers.h" />
+    <ClInclude Include="gameplay\GameLoop.h" />
+    <ClInclude Include="gameplay\GameServer.h" />
+    <ClInclude Include="gameplay\PacketBuilders.h" />
+    <ClInclude Include="gameplay\Player.h" />
+    <ClInclude Include="gameplay\QuizQueue.h" />
+    <ClInclude Include="gameplay\QuizRoom.h" />
+    <ClInclude Include="gameplay\Room.h" />
+    <ClInclude Include="gameplay\WorldRoom.h" />
+    <ClInclude Include="networking\Iocp.h" />
+    <ClInclude Include="networking\Listener.h" />
+    <ClInclude Include="networking\NetCommon.h" />
+    <ClInclude Include="networking\Packet.h" />
+    <ClInclude Include="networking\PacketDispatcher.h" />
+    <ClInclude Include="networking\Protocol.h" />
+    <ClInclude Include="networking\RecvBuffer.h" />
+    <ClInclude Include="networking\SendBuffer.h" />
+    <ClInclude Include="networking\Session.h" />
+    <ClInclude Include="networking\SessionManager.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

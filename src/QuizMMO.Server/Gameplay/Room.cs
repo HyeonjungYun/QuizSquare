@@ -24,23 +24,29 @@ public abstract class Room
     public int PlayerCount => _players.Count;
 
     /// <summary>
-    /// 플레이어를 넣는다. 본인에게 SRoomChanged 와 기존 인원의 SPlayerEnter 를, 기존 인원에게 SPlayerEnter 를 보낸다.
-    /// 이미 들어와 있으면 무시. (인원 전체를 보내는 것은 AOI 가 없는 뼈대의 선택이다 — 브리프 Out of scope 참고.)
+    /// 플레이어를 넣는다. 먼저 <see cref="PlacePlayer"/> 로 위치를 정하고, 본인에게 SRoomChanged 와 기존 인원의 SPlayerEnter 를,
+    /// 기존 인원에게 SPlayerEnter 를 보낸다. 이미 들어와 있으면 무시.
+    /// (인원 전체를 보내는 것은 AOI 가 없는 뼈대의 선택이다 — 브리프 Out of scope 참고.)
     /// </summary>
     public virtual void Enter(Player player)
     {
         if (_players.ContainsKey(player.Id)) return;
 
-        player.Send(new SRoomChanged { RoomId = Id, RoomType = Type, RoomName = Name });
+        PlacePlayer(player);
+
+        player.Send(new SRoomChanged { RoomId = Id, RoomType = Type, RoomName = Name, X = player.X, Y = player.Y });
         foreach (var other in _players.Values)
         {
-            player.Send(new SPlayerEnter { PlayerId = other.Id, Nickname = other.Nickname });
+            player.Send(new SPlayerEnter { PlayerId = other.Id, Nickname = other.Nickname, X = other.X, Y = other.Y });
         }
-        Broadcast(new SPlayerEnter { PlayerId = player.Id, Nickname = player.Nickname });
+        Broadcast(new SPlayerEnter { PlayerId = player.Id, Nickname = player.Nickname, X = player.X, Y = player.Y });
 
         _players[player.Id] = player;
         player.RoomId = Id;
     }
+
+    /// <summary>입장 시 위치를 정한다. 기본은 현재 위치 유지. 월드는 스폰 지점으로 덮어쓴다.</summary>
+    protected virtual void PlacePlayer(Player player) { }
 
     /// <summary>플레이어를 뺀다. 남은 인원에게 SPlayerLeave. 없으면 무시.</summary>
     public virtual void Leave(ulong playerId)

@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 게임 데이터(문제, 아이템)는 실행 파일 옆 Data/ 로 복사된다. 코드에 수치를 박지 않는다. -->
+    <None Update="Data\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

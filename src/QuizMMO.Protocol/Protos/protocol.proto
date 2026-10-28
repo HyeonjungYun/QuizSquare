@@ -3,6 +3,7 @@
 // 프레이밍: 모든 패킷은 4바이트 헤더 {u16 size(헤더 포함 전체), u16 id(MsgId)} 리틀엔디언 + protobuf 본문.
 // 헤더 처리는 PacketHeader.cs, id <-> 메시지 타입 매핑은 PacketRegistry.cs 에 있다.
 // 메시지 레이아웃을 바꾸면 ProtocolInfo.Version 을 올린다. CLogin 이 들고 오고 불일치는 거절된다.
+// 규칙: 필드 번호는 재사용하지 않는다. 지운 필드는 reserved 로 막는다. 기본값(0, 빈 문자열)은 와이어에 실리지 않는다.
 
 syntax = "proto3";
 
@@ -15,29 +16,66 @@ option csharp_namespace = "QuizMMO.Protocol";
 enum MsgId {
   MSG_ID_NONE = 0;
 
+  // ---- 로그인 ----
   MSG_ID_C_LOGIN = 1;
   MSG_ID_S_LOGIN = 2;
 
+  // ---- 채팅 ----
   MSG_ID_C_CHAT = 10;
   MSG_ID_S_CHAT = 11;
 
+  // ---- 핑 ----
   MSG_ID_C_PING = 20;
   MSG_ID_S_PONG = 21;
 
+  // ---- 퀴즈 대기열 ----
   MSG_ID_C_QUIZ_QUEUE_JOIN = 30;
   MSG_ID_C_QUIZ_QUEUE_LEAVE = 31;
   MSG_ID_S_QUIZ_QUEUE_STATUS = 32;
 
-  MSG_ID_S_ROOM_CHANGED = 40;   // 내가 들어간 룸
-  MSG_ID_S_PLAYER_ENTER = 41;   // 같은 룸에 누가 들어옴
+  // ---- 룸 입퇴장 ----
+  MSG_ID_S_ROOM_CHANGED = 40;   // 내가 들어간 룸 (스폰 위치 포함)
+  MSG_ID_S_PLAYER_ENTER = 41;   // 같은 룸에 누가 들어옴 (위치 포함)
   MSG_ID_S_PLAYER_LEAVE = 42;   // 같은 룸에서 누가 나감
+
+  // ---- 월드 이동 ----
+  MSG_ID_C_MOVE = 50;
+  MSG_ID_S_MOVE = 51;
+
+  // ---- 퀴즈 진행 ----
+  MSG_ID_S_QUIZ_START = 60;
+  MSG_ID_S_QUIZ_QUESTION = 61;
+  MSG_ID_C_QUIZ_ANSWER = 62;
+  MSG_ID_S_QUIZ_ANSWER_ACK = 63;
+  MSG_ID_S_QUIZ_REVEAL = 64;
+  MSG_ID_S_QUIZ_RESULT = 65;
+
+  // ---- 인벤토리 ----
+  MSG_ID_S_INVENTORY = 70;
+
+  // ---- 1:1 거래 ----
+  MSG_ID_C_TRADE_REQUEST = 80;
+  MSG_ID_S_TRADE_REQUESTED = 81;
+  MSG_ID_C_TRADE_RESPOND = 82;
+  MSG_ID_S_TRADE_STARTED = 83;
+  MSG_ID_C_TRADE_OFFER = 84;
+  MSG_ID_S_TRADE_OFFER = 85;
+  MSG_ID_C_TRADE_CONFIRM = 86;
+  MSG_ID_S_TRADE_CONFIRMED = 87;
+  MSG_ID_C_TRADE_CANCEL = 88;
+  MSG_ID_S_TRADE_COMPLETED = 89;
+  MSG_ID_S_TRADE_CANCELLED = 90;
+
+  // ---- 공통 ----
+  MSG_ID_S_ERROR = 100;         // 요청이 거절된 이유
 }
 
 enum LoginResult {
   LOGIN_RESULT_OK = 0;
-  LOGIN_RESULT_VERSION_MISMATCH = 1;
-  LOGIN_RESULT_BAD_NICKNAME = 2;
+  LOGIN_RESULT_VERSION_MISMATCH = 1;   // 서버가 끊는다
+  LOGIN_RESULT_BAD_NICKNAME = 2;       // 다른 닉네임으로 다시 시도 가능
   LOGIN_RESULT_ALREADY_LOGGED_IN = 3;
+  LOGIN_RESULT_NICKNAME_TAKEN = 4;     // 접속 중인 다른 플레이어가 쓰는 닉네임. 다시 시도 가능
 }
 
 enum QueueState {
@@ -51,10 +89,34 @@ enum RoomType {
   ROOM_TYPE_QUIZ = 1;
 }
 
+enum TradeCancelReason {
+  TRADE_CANCEL_REASON_NONE = 0;
+  TRADE_CANCEL_REASON_DECLINED = 1;        // 상대가 거절
+  TRADE_CANCEL_REASON_CANCELLED = 2;       // 한쪽이 취소
+  TRADE_CANCEL_REASON_TIMEOUT = 3;         // 응답/진행 시간 초과
+  TRADE_CANCEL_REASON_DISCONNECTED = 4;    // 상대 접속 종료
+  TRADE_CANCEL_REASON_LEFT_ROOM = 5;       // 상대가 월드를 떠남 (퀴즈 매칭 등)
+  TRADE_CANCEL_REASON_INVALID_OFFER = 6;   // 확정 시점에 제안을 뒷받침할 재화가 없음
+}
+
+enum ErrorCode {
+  ERROR_CODE_NONE = 0;
+  ERROR_CODE_NOT_IN_WORLD = 1;        // 월드에서만 가능한 행동
+  ERROR_CODE_TARGET_NOT_FOUND = 2;
+  ERROR_CODE_TARGET_BUSY = 3;         // 상대가 이미 거래 중
+  ERROR_CODE_SELF_TARGET = 4;
+  ERROR_CODE_TRADE_NOT_FOUND = 5;     // 없는 거래 id, 또는 내 거래가 아님, 또는 단계가 맞지 않음
+  ERROR_CODE_INSUFFICIENT_ITEMS = 6;  // 제안한 골드/아이템이 인벤토리에 없거나 거래 불가 아이템
+  ERROR_CODE_CHAT_TOO_FAST = 7;
+  ERROR_CODE_NOT_IN_QUIZ = 8;
+  ERROR_CODE_INVALID_REQUEST = 9;
+  ERROR_CODE_ALREADY_IN_TRADE = 10;
+}
+
 // ---- 로그인 ----
 message CLogin {
   uint32 protocol_version = 1;  // ProtocolInfo.Version
-  string nickname = 2;          // 1..32 바이트 (UTF-8)
+  string nickname = 2;          // 1..32 바이트 (UTF-8), 접속 중인 플레이어 사이에서 유일
 }
 
 message SLogin {
@@ -65,7 +127,7 @@ message SLogin {
 
 // ---- 채팅 ----
 message CChat {
-  string text = 1;              // 1..400 바이트 (UTF-8)
+  string text = 1;              // 1..400 바이트 (UTF-8). 쿨다운(Server:Game:ChatCooldownMs) 보다 빠르면 SError
 }
 
 message SChat {
@@ -100,13 +162,168 @@ message SRoomChanged {
   uint32 room_id = 1;
   RoomType room_type = 2;
   string room_name = 3;
+  float x = 4;                  // 내 스폰 위치
+  float y = 5;
 }
 
 message SPlayerEnter {
   uint64 player_id = 1;
   string nickname = 2;
+  float x = 3;
+  float y = 4;
 }
 
 message SPlayerLeave {
   uint64 player_id = 1;
+}
+
+// ---- 월드 이동 ----
+// 클라이언트가 자기 위치를 보내면 서버가 범위와 속도를 검증한다 (Server:World).
+// 통과하면 같은 룸의 다른 플레이어에게 SMove 를 보내고, 거절하면 보낸 사람에게 corrected=true 인 SMove 로 위치를 되돌린다.
+message CMove {
+  float x = 1;
+  float y = 2;
+}
+
+message SMove {
+  uint64 player_id = 1;
+  float x = 2;
+  float y = 3;
+  bool corrected = 4;           // true: 서버가 거절해 되돌린 내 위치 (받는 쪽이 본인)
+}
+
+// ---- 퀴즈 진행 ----
+// 흐름: SQuizStart → (SQuizQuestion → CQuizAnswer/SQuizAnswerAck → SQuizReveal) x N → SQuizResult → SRoomChanged(월드 복귀)
+message SQuizStart {
+  uint32 room_id = 1;
+  uint32 question_count = 2;
+  uint32 player_count = 3;
+  float starts_in_sec = 4;      // 첫 문제까지 남은 시간
+}
+
+message SQuizQuestion {
+  uint32 index = 1;             // 0부터
+  uint32 total = 2;
+  string text = 3;
+  repeated string choices = 4;  // 2..6개
+  float time_limit_sec = 5;
+}
+
+message CQuizAnswer {
+  uint32 index = 1;             // 답하는 문제 번호
+  uint32 choice = 2;            // choices 의 인덱스
+}
+
+message SQuizAnswerAck {
+  uint32 index = 1;
+  bool accepted = 2;            // false: 늦었거나 중복이거나 범위 밖
+}
+
+message QuizScore {
+  uint64 player_id = 1;
+  string nickname = 2;
+  uint32 score = 3;             // 누적 점수
+  uint32 correct_count = 4;     // 누적 정답 수
+  bool answered = 5;            // 이번 문제에 답했는지
+  bool correct = 6;             // 이번 문제 정답인지
+}
+
+message SQuizReveal {
+  uint32 index = 1;
+  uint32 correct_choice = 2;
+  repeated QuizScore scores = 3;
+}
+
+message ItemStack {
+  uint32 item_id = 1;
+  uint32 count = 2;
+}
+
+message QuizRank {
+  uint32 rank = 1;              // 동점은 같은 등수 (1,2,2,4)
+  uint64 player_id = 2;
+  string nickname = 3;
+  uint32 score = 4;
+  uint32 correct_count = 5;
+  int64 gold_reward = 6;
+  repeated ItemStack item_rewards = 7;
+}
+
+message SQuizResult {
+  repeated QuizRank ranking = 1;
+  float returns_in_sec = 2;     // 월드로 돌아가기까지
+}
+
+// ---- 인벤토리 ----
+// 로그인 직후와 인벤토리가 바뀔 때마다(보상, 거래) 전체 상태를 보낸다.
+message SInventory {
+  int64 gold = 1;
+  repeated ItemStack items = 2;
+}
+
+// ---- 1:1 거래 ----
+// 흐름: CTradeRequest → STradeRequested(상대) → CTradeRespond → STradeStarted(양쪽)
+//      → CTradeOffer/STradeOffer(양쪽, 제안이 바뀌면 양쪽 확정이 풀림) → CTradeConfirm/STradeConfirmed → 둘 다 확정 시 교환
+//      → STradeCompleted + SInventory(양쪽)   /   언제든 STradeCancelled(reason)
+message CTradeRequest {
+  uint64 target_player_id = 1;
+}
+
+message STradeRequested {
+  uint32 trade_id = 1;
+  uint64 from_player_id = 2;
+  string from_nickname = 3;
+  float expires_in_sec = 4;
+}
+
+message CTradeRespond {
+  uint32 trade_id = 1;
+  bool accept = 2;
+}
+
+message STradeStarted {
+  uint32 trade_id = 1;
+  uint64 partner_player_id = 2;
+  string partner_nickname = 3;
+}
+
+message CTradeOffer {
+  uint32 trade_id = 1;
+  int64 gold = 2;               // 0 이상, 내 보유량 이하
+  repeated ItemStack items = 3; // 거래 가능 아이템만, 최대 20종
+}
+
+message STradeOffer {
+  uint32 trade_id = 1;
+  uint64 player_id = 2;         // 이 제안을 낸 사람
+  int64 gold = 3;
+  repeated ItemStack items = 4;
+}
+
+message CTradeConfirm {
+  uint32 trade_id = 1;
+}
+
+message STradeConfirmed {
+  uint32 trade_id = 1;
+  uint64 player_id = 2;
+}
+
+message CTradeCancel {
+  uint32 trade_id = 1;
+}
+
+message STradeCompleted {
+  uint32 trade_id = 1;
+}
+
+message STradeCancelled {
+  uint32 trade_id = 1;
+  TradeCancelReason reason = 2;
+}
+
+// ---- 공통 ----
+message SError {
+  ErrorCode code = 1;
+  string detail = 2;            // 디버그용 영어 설명. UI 문구는 code 로 만든다
 }

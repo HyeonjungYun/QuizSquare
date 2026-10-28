@@ -1,0 +1,8 @@
+{
+  "items": [
+    { "id": 1001, "name": "황금 트로피", "description": "퀴즈 1위 보상", "tradable": true },
+    { "id": 1002, "name": "은 트로피", "description": "퀴즈 2위 보상", "tradable": true },
+    { "id": 1003, "name": "동 트로피", "description": "퀴즈 3위 보상", "tradable": true },
+    { "id": 2001, "name": "퀴즈 참가 배지", "description": "퀴즈에 참가하면 받는 배지. 거래 불가", "tradable": false }
+  ]
+}

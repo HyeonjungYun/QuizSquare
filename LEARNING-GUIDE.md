@@ -60,13 +60,19 @@ dotnet run --project tools/QuizMMO.TestClient -- --clients 3 --duration 3     # 
 - 종료: `Disconnect`의 `Interlocked.Exchange`, `DisconnectAfterFlush`
 확인 질문: `ReceiveAsync`가 `false`를 돌려주면 무슨 뜻이고 왜 `while` 루프로 처리하는가? `BufferList`를 매번 다시 지정하는 이유는? 세션 객체는 언제 메모리에서 사라지는가?
 
-**5단계 — Gameplay (1시간)**: `Gameplay/GameLoop.cs` → `GameHandlers.cs` → `GameServer.cs`의 `On*` → `Player.cs`, `Room.cs`, `WorldRoom.cs`, `QuizRoom.cs`, `QuizQueue.cs` → `GameServer.Tick / TryMatchQuiz / FinishQuizRoom`.
+**5단계 — Gameplay 뼈대 (1시간)**: `Gameplay/GameLoop.cs` → `GameHandlers.cs` → `GameServer.cs`의 `StartAsync`와 `On*` → `Player.cs`, `Inventory.cs`, `Room.cs`, `QuizQueue.cs` → `GameServer.Tick / TryMatchQuiz / FinishQuizRoom`.
 확인 질문: `Room`에 `lock`이 하나도 없는데 어떻게 안전한가? 핸들러가 `GameLoop.Post` 없이 룸을 직접 만지면 무슨 일이 생기는가? 퀴즈방이 끝나면 플레이어는 어떤 패킷을 어떤 순서로 받는가?
 
-**6단계 — 테스트와 클라이언트 (40분)**: `tests/QuizMMO.Server.Tests/FakeSink.cs`와 테스트 5개 → `tools/QuizMMO.TestClient/Program.cs`.
+**6단계 — 게임 시스템 (1.5시간)**: 세 시스템을 각각 "검증 → 상태 변경 → 알림" 순서로 읽습니다.
+- 이동: `WorldRoom.cs`의 `PlacePlayer`와 `TryMove`. 허용 거리를 어떻게 계산하고 왜 `dt`를 위아래로 자르는가? (2.10절)
+- 퀴즈: `QuizRoom.cs`의 `Update`(상태 머신) → `TryAnswer` → `Reveal`의 점수 계산 → `EnterResult`, 그리고 `QuizRanking.cs`, `RewardCalculator.cs`, `Gameplay/Data/QuestionBank.cs`. 2.8절 흐름도와 같이 보세요.
+- 거래: `TradeManager.cs`를 `Request → Respond → SetOffer → Confirm → Execute` 순서로. 제안이 바뀌면 왜 양쪽 확정이 풀리고, 왜 `Execute`에서 인벤토리를 다시 검사하는가? (2.9절)
+확인 질문: 세 시스템 모두 왜 `Player.Send`만 하고 `Session`을 모르는가? 플레이어가 거래 중에 퀴즈에 매칭되면 어떤 순서로 무슨 일이 일어나는가? (`GameServer.TryMatchQuiz` 참고)
+
+**7단계 — 테스트와 클라이언트 (40분)**: `tests/QuizMMO.Server.Tests/FakeSink.cs` → `RoomTests`, `QuizRoomTests`, `TradeManagerTests`, `WorldRoomTests` → `tools/QuizMMO.TestClient/Program.cs`(`--quiz`, `--move`, `--trade`로 흐름을 재생한다).
 확인 질문: 게임 로직이 `Session`이 아니라 `IMessageSink`에 의존하는 덕분에 무엇이 가능해졌는가? 클라이언트의 수신 루프와 `Session.ProcessPackets`는 어디가 같고 어디가 다른가?
 
-**7단계 — C++ 대조 읽기 (선택, 1시간)**: 3부의 대응표를 보며 `legacy/cpp/src/networking/Session.cpp`와 `Session.cs`를 나란히 읽습니다.
+**8단계 — C++ 대조 읽기 (선택, 1시간)**: 3부의 대응표를 보며 `legacy/cpp/src/networking/Session.cpp`와 `Session.cs`를 나란히 읽습니다.
 
 ### 1.3 관통하는 한 줄: 채팅 한 번의 여정
 
@@ -83,14 +89,17 @@ dotnet run --project tools/QuizMMO.TestClient -- --clients 3 --duration 3     # 
 ### 1.4 직접 해 보기 (난이도순)
 
 1. **스레드 관찰**: 0단계처럼 Debug 로그로 띄우고 접속 20명(`--clients 20`)을 붙여 `[tN]` 분포를 본다. `GameServer.OnLogin`, `Session.HandleRecv`, `Listener.HandleAccept`에 중단점을 걸고 VS의 "스레드" 창에서 어느 스레드인지 확인한다.
-2. **설정만 바꿔 퀴즈방 흐름 보기**: `--Server:Quiz:RoomSize=2 --Server:Quiz:RoomDurationSec=5`로 띄우고 클라이언트 2개(`--clients 2 --duration 8`)를 붙인다. `SQuizQueueStatus(Matched)` → `SRoomChanged(Quiz)` → 5초 뒤 `SRoomChanged(World)` 순서를 확인한다.
-3. **패킷 추가 (귓속말)**: `protocol.proto`에 `MSG_ID_C_WHISPER`, `MSG_ID_S_WHISPER`와 `CWhisper { uint64 target_player_id; string text; }`, `SWhisper { uint64 from_player_id; string nickname; string text; }`를 추가 → `PacketRegistry`에 두 줄 → `GameHandlers`에 핸들러(길이 검증 후 `Post`) → `GameServer.OnWhisper`(대상이 같은 룸에 있을 때만 전달) → 테스트 클라이언트에서 보내고 받기. 세 곳을 모두 고쳐야 동작한다는 것을 몸으로 익히는 과제입니다.
-4. **깨진 패킷 보내기**: 테스트 클라이언트에 `--bad-header` 옵션을 만들어 `size=9999`인 헤더를 보내고, 서버가 `bad packet size` 로그 후 끊는지 확인한다. 이어서 `size=4, id=60000`(미등록 id)도 보내 본다.
-5. **테스트 추가**: `QuizQueueTests`에 "Leave 뒤 TryTake가 남은 사람을 선착순으로 꺼낸다"를, `RoomTests`에 "Leave한 플레이어는 Chat을 받지 않는다"를 추가한다. 실패하는 테스트를 먼저 보고 나서 통과시키는 순서로.
-6. **부하와 정원**: `--clients 300 --duration 10 --quiet`로 붙여 status 로그와 CPU를 본다. 그다음 `--Server:Net:MaxSessions=100`으로 띄워 101번째부터 거절되는지(`session limit ... reached` 로그) 확인한다.
-7. **심화 — 할당 줄이기**: `PacketSerializer.Serialize`가 패킷마다 `byte[]`를 만든다. `ArrayPool<byte>`를 쓰면 어디서 빌리고 어디서 돌려줘야 하는지(브로드캐스트는 여러 세션이 같은 배열을 참조한다는 점) 설계해 본다. 바로 구현하기보다 "왜 지금은 안 해도 되는가"를 먼저 답해 본다.
-8. **심화 — 로직 스레드 분할**: 룸이 수백 개가 되면 `GameLoop` 하나로 부족해진다. 룸 ID로 `GameLoop`를 N개 중 하나에 고정 배정할 때 `MovePlayer`(룸 간 이동)는 어떻게 안전하게 만들 수 있는지 생각해 본다.
-9. **Unity 연결**: Unity 프로젝트에 `src/QuizMMO.Protocol/bin/Debug/netstandard2.1/QuizMMO.Protocol.dll`과 `Google.Protobuf.dll`을 `Assets/Plugins`에 넣고, `tools/QuizMMO.TestClient/Program.cs`의 접속·프레이밍 코드를 옮겨 로그인까지 해 본다.
+2. **퀴즈 한 판 돌려 보기**: 서버를 `--Server:Quiz:RoomSize=4 --Server:Quiz:QuestionTimeLimitSec=3`로 띄우고 `--clients 4 --duration 25 --expect-quiz`를 붙인다. `SQuizStart → SQuizQuestion → SQuizAnswerAck → SQuizReveal → SInventory → SQuizResult → SRoomChanged(World)` 순서와, 즉시 답한 정답이 `100 + 50 x (남은 시간 비율)`로 채점되는지 확인한다.
+3. **거래 재생과 거절 경로**: `--clients 2 --no-queue --expect-trade`로 거래가 완료되는 것을 본 뒤, 테스트 클라이언트의 `CTradeOffer`를 보유량보다 많은 골드로 바꿔 `SError(InsufficientItems)`가 오고 거래가 유지되는지 확인한다. `TradeManager.SetOffer`에 중단점을 걸면 검증 순서가 보인다.
+4. **이동 검증 깨 보기**: `--clients 2 --no-queue --expect-move --expect-correction`을 돌린 뒤, 테스트 클라이언트의 이동 폭(20)을 500으로 바꿔 매번 보정되는지, `--Server:World:MaxSpeed=10000`으로 띄우면 통과하는지 비교한다.
+5. **패킷 추가 (귓속말)**: `protocol.proto`에 `MSG_ID_C_WHISPER`, `MSG_ID_S_WHISPER`와 `CWhisper { uint64 target_player_id; string text; }`, `SWhisper { uint64 from_player_id; string nickname; string text; }`를 추가 → `PacketRegistry`에 두 줄 → `GameHandlers`에 핸들러(길이 검증 후 `Post`) → `GameServer.OnWhisper`(대상이 같은 룸에 있을 때만 전달) → 테스트 클라이언트에서 보내고 받기. 레지스트리를 빼먹으면 `Registry_CoversEveryMsgIdExceptNone` 테스트가 잡아 준다.
+6. **깨진 패킷 보내기**: 테스트 클라이언트에 `--bad-header` 옵션을 만들어 `size=9999`인 헤더를 보내고, 서버가 `bad packet size` 로그 후 끊는지 확인한다. 이어서 `size=4, id=60000`(미등록 id)도 보내 본다.
+7. **테스트 추가**: `TradeManagerTests`에 "거래 중 한쪽이 퀴즈에 매칭되면 `LeftRoom`으로 취소된다"를(`OnPlayerLeft` 호출), `QuizRankingTests`에 "점수가 같고 정답 수가 다르면 정답 수가 많은 쪽이 앞"을 추가한다. 실패하는 테스트를 먼저 보고 나서 통과시키는 순서로.
+8. **부하와 정원**: `--clients 300 --duration 10 --quiet`로 붙여 status 로그와 CPU를 본다. 그다음 `--Server:Net:MaxSessions=100`으로 띄워 101번째부터 거절되는지(`session limit ... reached` 로그) 확인한다.
+9. **심화 — 문제 유형·배점 추가**: `questions.json`에 난이도(`"difficulty": 1..3`)를 넣고 배점에 가중치를 주려면 어떤 파일이 바뀌어야 하는지(`QuizQuestion`·`QuestionBank` 검증, `QuizRoom.ScoreFor`, 필요하면 `SQuizQuestion`) 먼저 적어 보고 구현한다. 설정값은 `appsettings.json`으로.
+10. **심화 — 할당 줄이기**: `PacketSerializer.Serialize`가 패킷마다 `byte[]`를 만든다. `ArrayPool<byte>`를 쓰면 어디서 빌리고 어디서 돌려줘야 하는지(브로드캐스트는 여러 세션이 같은 배열을 참조한다는 점) 설계해 본다. 바로 구현하기보다 "왜 지금은 안 해도 되는가"를 먼저 답해 본다.
+11. **심화 — 로직 스레드 분할**: 룸이 수백 개가 되면 `GameLoop` 하나로 부족해진다. 룸 ID로 `GameLoop`를 N개 중 하나에 고정 배정할 때 `MovePlayer`(룸 간 이동)와 거래(두 플레이어가 다른 루프에 있을 수 있음)는 어떻게 안전하게 만들 수 있는지 생각해 본다.
+12. **Unity 연결**: Unity 프로젝트에 `src/QuizMMO.Protocol/bin/Debug/netstandard2.1/QuizMMO.Protocol.dll`과 `Google.Protobuf.dll`을 `Assets/Plugins`에 넣고, `tools/QuizMMO.TestClient/Program.cs`의 접속·프레이밍·메시지 처리 코드를 옮겨 로그인과 이동까지 해 본다.
 
 ### 1.5 흔한 실수와 디버깅 팁
 
@@ -126,8 +135,10 @@ dotnet run --project tools/QuizMMO.TestClient -- --clients 3 --duration 3     # 
    └───────────────────────────────────────────────────────┼────────── GameLoop.Post(작업) ──────────┘
                                                            ▼
    ┌─────────────────────── 로직 스레드 (GameLoop, 1개, 락 없음) ──────────────────────────────────┐
-   │   GameServer.On*  →  WorldRoom / QuizRoom(들) / QuizQueue  →  Player.Send → Session.Send     │
-   │   GameServer.Tick(dt) 매 50ms: 매칭 검사, QuizRoom.Update, 상태 로그                           │
+   │   GameServer.On*  →  WorldRoom(이동 검증) / QuizRoom(들) / QuizQueue / TradeManager            │
+   │                   →  Inventory 변경  →  Player.Send → Session.Send                             │
+   │   GameServer.Tick(dt) 매 50ms: 매칭 검사, QuizRoom.Update(상태 머신), TradeManager.Update(시간 초과), 상태 로그 │
+   │   데이터: QuestionBank(questions.json), ItemCatalog(items.json), RewardCalculator(Server:Rewards 설정)   │
    └────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -150,8 +161,8 @@ dotnet run --project tools/QuizMMO.TestClient -- --clients 3 --duration 3     # 
 |---|---|---|
 | `Protos/protocol.proto` | 메시지 정의와 `MsgId`, `LoginResult`, `QueueState`, `RoomType` 열거형 | 빌드 시 Grpc.Tools가 C# 클래스(`CLogin`, `SChat` …)를 생성. 열거형 값의 접두(`MSG_ID_`)는 C#에서 잘림 |
 | `PacketHeader` | 4바이트 헤더 읽기/쓰기, `IsValid`(4..4096) | `size`는 헤더 포함 전체 길이. 리틀엔디언 |
-| `ProtocolInfo` | 프로토콜 버전(1)과 필드 범위(닉네임 1..32바이트, 채팅 ≤400) | 레이아웃을 바꾸면 버전을 올린다 |
-| `PacketRegistry` | `MsgId` ↔ 메시지 타입/파서 매핑 (정적 생성자에서 12개 등록) | 새 메시지는 여기 한 줄 추가. `GetId<T>()`가 송신 쪽 오류를 즉시 드러낸다 |
+| `ProtocolInfo` | 프로토콜 버전(2)과 필드 범위(닉네임 1..32바이트, 채팅 ≤400, 보기 2..6개, 거래 아이템 ≤20종) | 레이아웃을 바꾸면 버전을 올린다 |
+| `PacketRegistry` | `MsgId` ↔ 메시지 타입/파서 매핑 (정적 생성자에서 33개 전부 등록) | 새 메시지는 여기 한 줄 추가. `GetId<T>()`가 송신 쪽 오류를 즉시 드러낸다 |
 | `PacketSerializer` | `Serialize(IMessage) → byte[]`, `TryDeserialize(id, body) → IMessage` | 브로드캐스트는 한 번 직렬화한 배열을 공유. 깨진 본문은 `false` |
 
 **QuizMMO.Server / Core**
@@ -178,14 +189,20 @@ dotnet run --project tools/QuizMMO.TestClient -- --clients 3 --duration 3     # 
 
 | 클래스 | 역할 | 알아둘 점 |
 |---|---|---|
-| `Player` | 로그인한 유저. `Id`, `Nickname`, `RoomId`, `InQuizQueue`, `Link`(IMessageSink) | `Session.Context`로 붙는다 |
-| `Room` (추상) | 플레이어 집합. `Enter/Leave`가 입퇴장 알림을 보냄, `Chat`, `Broadcast`, `Update(dt)` | 입장자에게 기존 인원 전체를 보낸다 (AOI 없음, 의도된 단순화) |
-| `WorldRoom` | 광장. 지금은 `Room` 그대로 | 이동 동기화·거래의 확장 지점 |
-| `QuizRoom` | 퀴즈 인스턴스. 지금은 `RoomDurationSec` 카운트다운만 | 퀴즈 상태 머신(출제/채점/결과)의 확장 지점 |
+| `Player` | 로그인한 유저. `Id`, `Nickname`, `RoomId`, 위치(`X`,`Y`), `Inventory`, `TradeId`, `InQuizQueue`, `Link`(IMessageSink) | `Session.Context`로 붙는다. `TryChat`이 쿨다운을 판정 |
+| `Inventory` | 골드와 아이템 스택. 음수·초과 차감 거절, `ToMessage()`로 `SInventory` | 인메모리. 바뀌면 전체를 다시 보낸다 |
+| `Room` (추상) | 플레이어 집합. `PlacePlayer`(위치) → `Enter`가 입장 알림, `Leave`, `Chat`, `Broadcast`, `Update(dt)` | 입장자에게 기존 인원 전체를 보낸다 (AOI 없음, 의도된 단순화) |
+| `WorldRoom` | 광장. 스폰 위치 배정, `TryMove`로 범위·속도 검증 후 `SMove` 전파, 위반은 보정 | 허용 거리 = MaxSpeed x Tolerance x dt, dt는 [MoveMinIntervalMs, MaxMoveDeltaSec]로 자른다 |
+| `QuizRoom` | 퀴즈 한 판의 상태 머신 Starting → Question → Reveal → … → Result → Finished. `TryAnswer`, 점수 계산, `OnResult` | 전원이 답하면 바로 공개. 참가자가 0명이면 즉시 종료 |
+| `QuizRanking` | 성적 → 등수 (동점은 같은 등수, 1·2·2·4) | 순수 함수 |
+| `RewardCalculator` | 등수별 골드·아이템을 ranking 항목에 채우고 인벤토리에 넣는다 | 결과 전에 나간 플레이어는 보상 없음. 카탈로그에 없는 아이템은 건너뜀 |
 | `QuizQueue` | 선착순 대기열. `Join/Leave/TryTake` | `Player.InQuizQueue`는 이 클래스만 바꾼다 |
+| `TradeManager` | 1:1 거래 세션. 요청·수락·제안·확정·교환·취소, 시간 초과 | 제안이 바뀌면 양쪽 확정 해제. 교환 직전 재검증. 월드 이탈·접속 종료 시 취소 |
+| `Data/QuestionBank` | `questions.json` 로드·검증, 판마다 무작위 `Sample` | 파일이 깨지면 서버가 시작하지 않는다 (조용히 빈 서버로 뜨지 않는다) |
+| `Data/ItemCatalog` | `items.json` 로드. `IsTradable`로 거래 가능 여부 | 참가 배지는 거래 불가 |
 | `GameLoop` | 전용 로직 스레드. `Post`, 틱(`TickHandler(dt)`), 종료 시 남은 작업 처리 | 틱이 밀리면 따라잡기를 포기하고 다시 센다 |
-| `GameHandlers` | C_ 패킷 5개의 핸들러 등록. 검증 후 `Post` | `CPing`만 I/O 스레드에서 바로 응답 (상태가 없으므로) |
-| `GameServer` | 조립과 수명(`IHostedService`), `On*` 게임 명령, `Tick`(매칭·퀴즈방 종료·상태 로그) | 룸 간 이동은 `MovePlayer` 하나로만 |
+| `GameHandlers` | C_ 패킷 12개의 핸들러 등록. 범위 검증 후 `Post` | `CPing`만 I/O 스레드에서 바로 응답 (상태가 없으므로) |
+| `GameServer` | 조립과 수명(`IHostedService`), 데이터 로드, `On*` 게임 명령, `Tick`(매칭·퀴즈·거래·상태 로그), 보상 지급 | 룸 간 이동은 `MovePlayer` 하나로만. 닉네임 유일성 관리 |
 | `SmokeStopper` | `Smoke:Seconds` 뒤 호스트 종료 | 자동 테스트·기동 확인용 |
 | `Program.cs` | Generic Host 구성: 설정 소스, 콘솔 로거, DI 등록 | `--Key=Value`가 파일 설정보다 우선 |
 
@@ -193,10 +210,13 @@ dotnet run --project tools/QuizMMO.TestClient -- --clients 3 --duration 3     # 
 
 | 항목 | 역할 |
 |---|---|
-| `QuizMMO.TestClient/Program.cs` | `TcpClient`로 접속 → `CLogin` → 채팅/핑/대기열 → 수신 출력. 종료 코드로 합격 판정. 옵션 `--clients --duration --version --no-queue --quiet` |
-| `FakeSink` | 받은 패킷을 헤더 검증 후 메시지로 풀어 기록. 룸/대기열 테스트의 상대 |
+| `QuizMMO.TestClient/Program.cs` | `TcpClient`로 접속 → `CLogin` → 채팅/핑/대기열 → 수신 출력. `--quiz`(자동 응답), `--move`/`--bad-move`, `--trade`로 흐름 재생, `--expect-*`로 합격 조건 추가. 종료 코드로 판정 |
+| `FakeSink` | 받은 패킷을 헤더 검증 후 메시지로 풀어 기록. 룸·대기열·퀴즈·거래 테스트의 상대 |
 | `RecvBufferTests`, `PacketSerializerTests` | 프레이밍, 분할 수신 복원, 헤더 범위, 깨진 본문, 레지스트리 완전성 |
-| `QuizQueueTests`, `RoomTests`, `GameLoopTests` | 대기열 FIFO, 입퇴장 알림과 채팅 브로드캐스트, 로직 스레드 실행 보장 |
+| `RoomTests`, `WorldRoomTests` | 입퇴장 알림과 채팅 브로드캐스트, 스폰 반경, 이동 수락/보정/순간이동 금지 |
+| `QuizRoomTests`, `QuizRankingTests`, `RewardCalculatorTests` | 상태 전이, 채점(속도 보너스), 중복·지연 답안 거절, 동점 등수, 보상 계산 |
+| `TradeManagerTests`, `InventoryTests`, `PlayerTests` | 거래 전체 흐름과 거절 경로·시간 초과·이탈 취소, 인벤토리 차감 규칙, 채팅 쿨다운 |
+| `GameDataTests`, `QuizQueueTests`, `GameLoopTests` | 데이터 파일 검증과 샘플링, 대기열 FIFO, 로직 스레드 실행 보장 |
 
 ### 2.4 스레드 규칙 요약
 
@@ -207,7 +227,7 @@ dotnet run --project tools/QuizMMO.TestClient -- --clients 3 --duration 3     # 
 
 ### 2.5 시작과 종료 순서
 
-시작: 핸들러 등록 → `SessionManager` → `WorldRoom` → `GameLoop.Start` → `Listener.Start`.
+시작: 핸들러 등록 → 데이터 로드(`QuestionBank`, `ItemCatalog`; 실패하면 시작 자체가 실패) → `SessionManager` → `WorldRoom`, `TradeManager` → `GameLoop.Start` → `Listener.Start`.
 종료(`Ctrl+C` 또는 `Smoke`): `Listener.Stop`(새 접속 거부) → `SessionManager.DisconnectAll`(모든 세션 끊김 → 퇴장 작업이 `Post`됨) → `GameLoop.Stop`(남은 작업 실행 후 스레드 종료).
 
 ### 2.6 설정 키 (`appsettings.json` → `ServerOptions`)
@@ -219,9 +239,20 @@ dotnet run --project tools/QuizMMO.TestClient -- --clients 3 --duration 3     # 
 | `Server:Net:RecvBufferBytes` | 65536 | 세션당 수신 버퍼 (최소 8192로 보정) |
 | `Server:Net:AcceptBacklog` | 64 | 미리 걸어두는 `AcceptAsync` 수 |
 | `Server:Game:TickHz`, `WorldName` | 20, Plaza | 로직 틱, 광장 이름 |
-| `Server:Quiz:RoomSize` | 20 | 퀴즈방 정원 |
-| `Server:Quiz:MatchCheckIntervalSec` | 1.0 | 매칭 검사 주기 |
-| `Server:Quiz:RoomDurationSec` | 30.0 | 퀴즈방 자리표시 길이 (퀴즈 로직 전까지) |
+| `Server:Game:ChatCooldownMs` | 500 | 채팅 최소 간격. 위반은 `SError(ChatTooFast)` |
+| `Server:Game:StartingGold` | 100 | 로그인 시 지급 골드 |
+| `Server:World:Width`, `Height` | 2000, 2000 | 월드 범위 (0..Width, 0..Height) |
+| `Server:World:SpawnX`, `SpawnY`, `SpawnRadius` | 1000, 1000, 50 | 스폰 지점과 반지름 |
+| `Server:World:MaxSpeed`, `SpeedTolerance` | 300, 1.5 | 초당 이동 거리와 여유 배수 |
+| `Server:World:MoveMinIntervalMs`, `MaxMoveDeltaSec` | 30, 1.0 | 이동 간격 dt의 하한/상한 (순간이동 방지) |
+| `Server:Quiz:RoomSize`, `MatchCheckIntervalSec` | 20, 1.0 | 퀴즈방 정원, 매칭 검사 주기 |
+| `Server:Quiz:QuestionsPerRound` | 5 | 한 판 문제 수 |
+| `Server:Quiz:StartDelaySec`, `QuestionTimeLimitSec`, `RevealSec`, `ResultSec` | 3, 10, 3, 5 | 단계별 시간 |
+| `Server:Quiz:BasePoints`, `SpeedBonusMaxPoints` | 100, 50 | 정답 점수 = Base + Bonus x 남은 시간 비율 |
+| `Server:Quiz:QuestionsFile`, `ItemsFile` | Data/questions.json, Data/items.json | 데이터 파일 (실행 파일 옆 경로 우선) |
+| `Server:Rewards:ParticipationGold`, `GoldPerCorrect` | 10, 5 | 참가 골드, 정답당 골드 |
+| `Server:Rewards:RankBonusGold`, `RankItemIds`, `ParticipationItemId` | [100,50,25], [1001,1002,1003], 2001 | 등수별 보너스·아이템, 참가 배지 |
+| `Server:Trade:RequestTimeoutSec`, `IdleTimeoutSec` | 20, 120 | 응답 대기, 진행 중 무변화 시간 초과 |
 | `Server:StatusIntervalSec` | 10 | 상태 로그 주기 (0 이하면 끔) |
 | `Smoke:Seconds` | 0 | 0보다 크면 그 시간 뒤 자동 종료 |
 
@@ -229,14 +260,53 @@ dotnet run --project tools/QuizMMO.TestClient -- --clients 3 --duration 3     # 
 
 | MsgId | 방향 | 본문 | 설명 |
 |---|---|---|---|
-| `CLogin` (1) | C→S | `protocol_version`, `nickname` | 버전 불일치·닉네임 길이 위반은 `SLogin` 거절 후 끊김 |
-| `SLogin` (2) | S→C | `result`, `player_id`, `room_id` | 성공 시 월드 룸 입장 |
-| `CChat` (10) / `SChat` (11) | C→S / S→C | `text` / `player_id`, `nickname`, `text` | 같은 룸 전원에게 (본인 포함) |
+| `CLogin` (1) / `SLogin` (2) | C→S / S→C | `protocol_version`, `nickname` / `result`, `player_id`, `room_id` | 버전 불일치는 끊김. 닉네임 형식 위반·중복은 결과만 보내고 연결 유지(재시도 가능). 성공 시 `SInventory`와 월드 입장 |
+| `CChat` (10) / `SChat` (11) | C→S / S→C | `text` / `player_id`, `nickname`, `text` | 같은 룸 전원에게 (본인 포함). 쿨다운 위반은 `SError` |
 | `CPing` (20) / `SPong` (21) | C→S / S→C | `client_time_ms` / `+ server_time_ms` | I/O 스레드에서 즉시 응답 |
-| `CQuizQueueJoin` (30), `CQuizQueueLeave` (31) | C→S | 없음 | 월드에서만 참가 가능 |
-| `SQuizQueueStatus` (32) | S→C | `state`, `waiting`, `required` | 대기 인원 변동 시 대기자 전원에게 |
-| `SRoomChanged` (40) | S→C | `room_id`, `room_type`, `room_name` | 내가 들어간 룸 |
-| `SPlayerEnter` (41) / `SPlayerLeave` (42) | S→C | `player_id`(, `nickname`) | 같은 룸의 입퇴장 알림 |
+| `CQuizQueueJoin` (30), `CQuizQueueLeave` (31), `SQuizQueueStatus` (32) | C→S, S→C | `state`, `waiting`, `required` | 월드에서만 참가 가능. 인원 변동 시 대기자 전원에게 |
+| `SRoomChanged` (40), `SPlayerEnter` (41), `SPlayerLeave` (42) | S→C | 룸 정보 + 내 위치 / `player_id`, `nickname`, `x`, `y` / `player_id` | 입퇴장 알림 (위치 포함) |
+| `CMove` (50) / `SMove` (51) | C→S / S→C | `x`, `y` / `player_id`, `x`, `y`, `corrected` | 검증 통과 시 다른 플레이어에게, 거절 시 본인에게 `corrected=true` |
+| `SQuizStart` (60), `SQuizQuestion` (61) | S→C | 문제 수·인원·시작까지 / `index`, `total`, `text`, `choices[]`, `time_limit_sec` | |
+| `CQuizAnswer` (62) / `SQuizAnswerAck` (63) | C→S / S→C | `index`, `choice` / `index`, `accepted` | 중복·지연·범위 밖은 `accepted=false` |
+| `SQuizReveal` (64), `SQuizResult` (65) | S→C | `correct_choice`, `scores[]` / `ranking[]`(등수·점수·보상), `returns_in_sec` | |
+| `SInventory` (70) | S→C | `gold`, `items[]` | 로그인 직후, 보상·거래 뒤 전체 상태 |
+| `CTradeRequest` (80) → `STradeRequested` (81) → `CTradeRespond` (82) → `STradeStarted` (83) | C→S→C | `target_player_id` / `trade_id`, `from_*`, `expires_in_sec` / `trade_id`, `accept` / `partner_*` | 요청과 수락 |
+| `CTradeOffer` (84) / `STradeOffer` (85) | C→S / S→C | `trade_id`, `gold`, `items[]` (+ `player_id`) | 제안을 통째로 교체. 양쪽 확정 해제 |
+| `CTradeConfirm` (86) / `STradeConfirmed` (87) | C→S / S→C | `trade_id` (+ `player_id`) | 둘 다 확정하면 교환 |
+| `CTradeCancel` (88), `STradeCompleted` (89), `STradeCancelled` (90) | C→S, S→C | `trade_id` (+ `reason`) | 취소 사유: Declined, Cancelled, Timeout, Disconnected, LeftRoom, InvalidOffer |
+| `SError` (100) | S→C | `code`, `detail` | 요청 거절 이유 (NotInWorld, TargetBusy, InsufficientItems, ChatTooFast, NotInQuiz …) |
+
+### 2.8 퀴즈 한 판의 흐름
+
+```
+대기열에 RoomSize 명 → GameServer.TryMatchQuiz: QuizRoom 생성, QuestionBank.Sample(N문제), 진행 중 거래 취소(LeftRoom),
+                       MovePlayer(월드 → 퀴즈방: SPlayerLeave / SRoomChanged(Quiz)), room.Begin()
+  Starting  ─ StartDelaySec ─▶ SQuizStart
+  Question  ─▶ SQuizQuestion(index, choices, time_limit)   ◀─ CQuizAnswer → SQuizAnswerAck    전원 답하면 즉시 다음 단계
+  Reveal    ─▶ SQuizReveal(correct_choice, 누적 점수)        점수 = BasePoints + SpeedBonusMax x (남은 시간 / 제한 시간)
+  (문제가 남았으면 Question 으로, 아니면)
+  Result    ─▶ OnResult: QuizRanking.Rank → RewardCalculator.Apply(골드·아이템 → Inventory) → SInventory → SQuizResult
+  Finished  ─▶ GameServer.FinishQuizRoom: MovePlayer(퀴즈방 → 월드: SRoomChanged(World))
+```
+퀴즈방을 나간 플레이어는 참가자에서 빠지고 보상도 받지 않는다. 마지막 참가자가 나가면 방은 즉시 끝난다.
+
+### 2.9 거래 한 번의 흐름
+
+```
+A: CTradeRequest(B)  ─▶ 검증(둘 다 월드에 있음, 둘 다 거래 중 아님, 자기 자신 아님) ─▶ B: STradeRequested   (RequestTimeoutSec 안에 응답)
+B: CTradeRespond(accept=true) ─▶ 양쪽 STradeStarted                                                       (거절이면 STradeCancelled(Declined))
+A/B: CTradeOffer(gold, items) ─▶ 보유량·거래 가능 아이템 검증 ─▶ 양쇽 STradeOffer, 양쪽 확정 해제, IdleTimeoutSec 리셋
+A/B: CTradeConfirm ─▶ 양쪽 STradeConfirmed ─▶ 둘 다 확정이면 Execute: 인벤토리 재검증 → 교환 → STradeCompleted + SInventory
+언제든: CTradeCancel / 시간 초과 / 접속 종료 / 월드 이탈(퀴즈 매칭) ─▶ 양쪽 STradeCancelled(reason)
+```
+한 사람은 한 거래만 할 수 있고(`Player.TradeId`), 거래 불가 아이템(참가 배지)은 제안할 수 없다. 의미상 거절은 `SError`로 알리고 거래는 유지된다.
+
+### 2.10 이동 검증
+
+클라이언트가 `CMove(x, y)`를 보내면 서버는 (1) 좌표가 유한하고 월드 범위 안인지, (2) 마지막 수락 위치에서의 거리가
+`MaxSpeed x SpeedTolerance x dt` 안인지 본다. `dt`는 마지막 수락 시각부터의 경과 시간을 `[MoveMinIntervalMs, MaxMoveDeltaSec]`로
+잘라 쓴다. 하한은 너무 잦은 패킷에도 최소한의 이동을 허용하고, 상한은 오래 멈춘 뒤 한 번에 멀리 가는 순간이동을 막는다.
+통과하면 다른 플레이어에게 `SMove`, 거절하면 본인에게만 `SMove(corrected=true)`로 서버 위치를 되돌려 준다. 클라이언트는 그 위치로 스냅해야 한다.
 
 ---
 
@@ -250,6 +320,10 @@ dotnet run --project tools/QuizMMO.TestClient -- --clients 3 --duration 3     # 
 - 프레이밍: `{u16 size, u16 id}` 헤더, 수신 버퍼 압축(`Clean`), 완전한 패킷만 꺼내는 루프.
 - 세션 규칙: 수신 1개·송신 1개 진행, 송신 큐 + gather, 잘못된 패킷은 끊기, 거절 응답 후 끊기(`DisconnectAfterFlush`).
 - 룸/대기열/매칭/퀴즈방 복귀 로직, 설정 주도 수치, 레이트리밋 로그, 서버 권위 검증.
+
+범위 차이도 하나 있습니다. C++ 버전은 MVP 1(뼈대: 접속, 프레이밍, 로그인, 채팅, 대기열, 자리표시 퀴즈방)에서 멈췄고,
+이동 검증·퀴즈 진행과 채점·보상과 인벤토리·1:1 거래는 C# 버전에만 있습니다. 두 버전을 비교할 때는 `Session`, `Room`,
+`GameLoop`처럼 양쪽에 다 있는 파일로 비교하세요.
 
 ### 3.2 달라진 것 (대응표)
 

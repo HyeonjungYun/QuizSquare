@@ -1,4 +1,5 @@
 using QuizMMO.Protocol;
+using QuizMMO.Server.Core;
 using QuizMMO.Server.Gameplay;
 using Xunit;
 
@@ -6,6 +7,8 @@ namespace QuizMMO.Server.Tests;
 
 public class RoomTests
 {
+    private static WorldRoom NewWorld() => new(7, "Plaza", new ServerOptions.WorldOptions { SpawnRadius = 0 });
+
     private static (Player player, FakeSink sink) NewPlayer(ulong id)
     {
         var sink = new FakeSink();
@@ -15,18 +18,20 @@ public class RoomTests
     [Fact]
     public void Enter_SendsRoomChangedAndExistingPlayers_AndNotifiesOthers()
     {
-        var room = new WorldRoom(7, "Plaza");
+        var room = NewWorld();
         var (first, firstSink) = NewPlayer(1);
         var (second, secondSink) = NewPlayer(2);
         room.Enter(first);
 
         room.Enter(second);
 
-        // 두 번째 입장자: 룸 정보 + 기존 인원(1번)
+        // 두 번째 입장자: 룸 정보(스폰 위치 포함) + 기존 인원(1번)
         var changed = Assert.Single(secondSink.Of<SRoomChanged>());
         Assert.Equal(7u, changed.RoomId);
         Assert.Equal(RoomType.World, changed.RoomType);
         Assert.Equal("Plaza", changed.RoomName);
+        Assert.Equal(second.X, changed.X);
+        Assert.Equal(second.Y, changed.Y);
         var seen = Assert.Single(secondSink.Of<SPlayerEnter>());
         Assert.Equal(1UL, seen.PlayerId);
         // 기존 인원(1번): 2번이 들어왔다는 알림
@@ -39,7 +44,7 @@ public class RoomTests
     [Fact]
     public void EnterTwice_IsIgnored()
     {
-        var room = new WorldRoom(7, "Plaza");
+        var room = NewWorld();
         var (player, sink) = NewPlayer(1);
         room.Enter(player);
 
@@ -52,7 +57,7 @@ public class RoomTests
     [Fact]
     public void Leave_BroadcastsPlayerLeaveToRemaining_AndClearsRoomId()
     {
-        var room = new WorldRoom(7, "Plaza");
+        var room = NewWorld();
         var (first, firstSink) = NewPlayer(1);
         var (second, _) = NewPlayer(2);
         room.Enter(first);
@@ -70,7 +75,7 @@ public class RoomTests
     [Fact]
     public void Chat_ReachesEveryoneIncludingSender()
     {
-        var room = new WorldRoom(7, "Plaza");
+        var room = NewWorld();
         var (first, firstSink) = NewPlayer(1);
         var (second, secondSink) = NewPlayer(2);
         room.Enter(first);
@@ -88,16 +93,17 @@ public class RoomTests
     }
 
     [Fact]
-    public void QuizRoom_FinishesAfterDuration()
+    public void Broadcast_ExceptSender_SkipsThatPlayer()
     {
-        var room = new QuizRoom(9, "Quiz-9", durationSec: 1.0f);
+        var room = NewWorld();
+        var (first, firstSink) = NewPlayer(1);
+        var (second, secondSink) = NewPlayer(2);
+        room.Enter(first);
+        room.Enter(second);
 
-        room.Update(0.4f);
-        Assert.False(room.IsFinished);
-        room.Update(0.7f);
+        room.Broadcast(new SPlayerLeave { PlayerId = 99 }, except: first.Id);
 
-        Assert.True(room.IsFinished);
-        Assert.Equal(0f, room.RemainingSec);
-        Assert.Equal(RoomType.Quiz, room.Type);
+        Assert.Empty(firstSink.Of<SPlayerLeave>());
+        Assert.Single(secondSink.Of<SPlayerLeave>());
     }
 }
